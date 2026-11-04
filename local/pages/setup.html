@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>网课助手 · 一键安装</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;background:#08080a;color:#e8e8ea;font:14px/1.65 "Microsoft YaHei",system-ui,sans-serif;
+       background-image:radial-gradient(1200px 600px at 20% -10%,rgba(255,255,255,0.07),transparent 60%),
+                        radial-gradient(900px 500px at 100% 0%,rgba(255,255,255,0.05),transparent 55%);
+       min-height:100vh}
+  .wrap{max-width:820px;margin:0 auto;padding:56px 24px 80px}
+  .badge{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:2px;color:#a1a1aa;
+         border:1px solid rgba(255,255,255,0.16);border-radius:999px;padding:4px 12px;margin-bottom:18px}
+  .badge i{width:6px;height:6px;border-radius:50%;background:#fff;display:inline-block}
+  h1{font-size:34px;line-height:1.25;margin:0 0 10px;font-weight:700;letter-spacing:-0.5px;color:#fafafa}
+  .lead{color:#9a9aa3;margin:0 0 40px;max-width:620px}
+  section{border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:22px 22px 20px;margin-bottom:16px;
+          background:linear-gradient(170deg,rgba(24,24,27,0.9),rgba(12,12,14,0.9));position:relative}
+  section.done{border-color:rgba(255,255,255,0.42);box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset}
+  h2{font-size:16px;margin:0 0 14px;display:flex;align-items:center;gap:10px;color:#fafafa;font-weight:600}
+  .num{flex:none;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+       font-size:12px;font-weight:700;background:#fafafa;color:#0a0a0a}
+  section.done .num{background:#fff}
+  .rows{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;
+       border:1px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(255,255,255,0.03)}
+  .row .b{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .row .b b{font-size:13px;font-weight:600;color:#f4f4f5}
+  .row .b span{font-size:11.5px;color:#86868f}
+  .tag{font-size:11.5px;padding:2px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.2);color:#d4d4d8;white-space:nowrap}
+  .tag.ok{background:#fafafa;color:#0a0a0a;border-color:#fafafa;font-weight:600}
+  .tag.no{border-style:dashed;color:#9a9aa3}
+  .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-size:13px;padding:9px 16px;border-radius:9px;
+       border:1px solid rgba(255,255,255,0.22);color:#e8e8ea;background:transparent;cursor:pointer;transition:all .15s;font-family:inherit}
+  .btn:hover{background:rgba(255,255,255,0.1)}
+  .btn.primary{background:#fafafa;color:#0a0a0a;border-color:#fafafa;font-weight:700}
+  .btn.primary:hover{background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,0.1)}
+  .btn.small{padding:6px 12px;font-size:12px}
+  .note{font-size:12px;color:#86868f;margin:12px 0 0;padding-left:1px}
+  .note b{color:#d4d4d8;font-weight:600}
+  a.inline{color:#fafafa;text-decoration:underline;text-underline-offset:3px}
+  .spin{display:inline-block;width:10px;height:10px;border:1.5px solid rgba(255,255,255,0.3);border-top-color:#fff;
+        border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .steps{margin:0 0 12px;padding:0;list-style:none;counter-reset:s}
+  .steps li{counter-increment:s;position:relative;padding:7px 0 7px 30px;font-size:13px;color:#c9c9d0;border-bottom:1px dashed rgba(255,255,255,0.07)}
+  .steps li:last-child{border-bottom:none}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:7px;width:19px;height:19px;border-radius:50%;
+    border:1px solid rgba(255,255,255,0.35);color:#d4d4d8;font-size:11px;font-weight:700;
+    display:inline-flex;align-items:center;justify-content:center}
+  .steps li b{color:#fafafa;font-weight:600}
+  code,.mono{font-family:Consolas,"Courier New",monospace;font-size:12.5px;background:rgba(255,255,255,0.09);
+    border:1px solid rgba(255,255,255,0.13);border-radius:5px;padding:1px 6px;color:#fafafa;white-space:nowrap}
+  .copybar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;
+    background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);margin-bottom:12px}
+  .copybar .lbl{font-size:12px;color:#86868f;flex:none}
+  .copybar .val{flex:1;min-width:150px;font-family:Consolas,"Courier New",monospace;font-size:12.5px;color:#fafafa;
+    background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:4px 9px;
+    overflow:auto;white-space:nowrap}
+  .warnbox{display:none;margin:0 0 14px;padding:12px 14px;border-left:3px solid #fafafa;border-radius:0 9px 9px 0;
+    background:rgba(255,255,255,0.07);font-size:12.5px;color:#e4e4e7;line-height:1.7}
+  .warnbox.on{display:block}
+  .warnbox b{color:#fff}
+  section.need{border-color:rgba(255,255,255,0.5);box-shadow:0 0 0 1px rgba(255,255,255,0.1) inset,0 0 24px rgba(255,255,255,0.06)}
+  footer{color:#5f5f66;font-size:12px;margin-top:26px}
+  .divider{height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.16),transparent);margin:34px 0 18px}
+  /* 第 4 步:三个刷课网站入口 */
+  .sites{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  @media (max-width:640px){.sites{grid-template-columns:1fr}}
+  .site{display:flex;flex-direction:column;gap:4px;position:relative;text-decoration:none;padding:14px 15px 13px;border-radius:12px;
+    border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.045);transition:all .16s;overflow:hidden}
+  .site:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.34);transform:translateY(-1px)}
+  .site .nm{font-size:14px;font-weight:700;color:#fafafa;letter-spacing:.3px}
+  .site .host{font-size:11.5px;color:#8a8a93;font-family:Consolas,"Courier New",monospace}
+  .site .go{position:absolute;right:13px;top:13px;font-size:13px;color:#a1a1aa;transition:all .16s}
+  .site:hover .go{color:#fff;transform:translateX(2px)}
+  .site .kind{font-size:11px;color:#a1a1aa;margin-top:2px}
+  .btn.dim{opacity:.55}
+  .btn.dim:hover{background:transparent;box-shadow:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="badge"><i></i>LOCAL SETUP · 本机检测</div>
+  <h1>一键安装向导</h1>
+  <p class="lead">自动检测本机的油猴与开关状态，通过后点按钮即可装脚本，无需复制代码。<a class="inline" href="#step4">已经装好？直接去刷课 ↓</a></p>
+
+  <section id="step1">
+    <h2><span class="num">1</span>装脚本管理器（Tampermonkey）</h2>
+    <div class="rows" id="envRows"><div class="row"><div class="b"><b><span class="spin"></span>正在检测本机浏览器…</b></div></div></div>
+    <div class="actions" id="envActions"></div>
+  </section>
+
+  <section id="step2">
+    <h2><span class="num">2</span>开启「允许用户脚本」</h2>
+    <div class="rows" id="permRows"><div class="row"><div class="b"><b><span class="spin"></span>正在读取扩展设置…</b></div></div></div>
+    <div class="warnbox" id="permWarn">
+      <b>开关关着 → 脚本显示「已启用」但一条都不执行。</b>判断方法：油猴弹窗顶部出现黑条提示、脚本名变灰，就是这个开关没开。
+    </div>
+    <ol class="steps">
+      <li>地址栏输入 <code>edge://extensions</code>（Chrome 用 <code>chrome://extensions</code>）</li>
+      <li>找到 <b>Tampermonkey</b> → 「<b>详细信息</b>」</li>
+      <li>打开「<b>允许用户脚本</b>」开关</li>
+      <li>回到本页，3 秒内状态自动变「已开启」</li>
+    </ol>
+    <div class="copybar">
+      <span class="lbl">地址栏直达</span>
+      <span class="val" id="extUrl">edge://extensions</span>
+      <button class="btn small" id="copyExt">复制</button>
+    </div>
+  </section>
+
+  <section id="step3">
+    <h2><span class="num">3</span>装入脚本</h2>
+    <div class="actions">
+      <a class="btn primary" href="/install/xuexitong-autostudy.user.js">安装「网课助手」<span id="verMain"></span></a>
+      <a class="btn" href="/install/xuexitong-webai-bridge.user.js">安装「网页 AI 桥」（可选）</a>
+    </div>
+    <p class="note">点「安装」后油猴会弹出确认页，再点一次「安装」即可；没反应 = 第 1 步没装好。</p>
+    <p class="note" id="verNote">油猴确认页顶部显示的版本号应与本页一致，不一致说明装的是旧条目。</p>
+  </section>
+
+  <section id="step4">
+    <h2><span class="num">4</span>开始刷课</h2>
+    <div class="sites">
+      <a class="site" href="https://i.chaoxing.com" target="_blank" rel="noreferrer">
+        <span class="go">→</span>
+        <span class="nm">学习通</span>
+        <span class="host">i.chaoxing.com</span>
+        <span class="kind">超星 · 视频/测验/作业</span>
+      </a>
+      <a class="site" href="https://www.zhihuishu.com" target="_blank" rel="noreferrer">
+        <span class="go">→</span>
+        <span class="nm">智慧树</span>
+        <span class="host">zhihuishu.com</span>
+        <span class="kind">知到 · 视频连播</span>
+      </a>
+      <a class="site" href="https://www.yuketang.cn" target="_blank" rel="noreferrer">
+        <span class="go">→</span>
+        <span class="nm">雨课堂</span>
+        <span class="host">yuketang.cn</span>
+        <span class="kind">学堂在线 · 视频/弹题</span>
+      </a>
+    </div>
+    <p class="note"><b>进课程页后看右下角</b>：出现「网课助手」面板 = 装好了。首次使用点面板 ⚙ 填 AI Key（或选「网页 AI」），再点「开始」。</p>
+    <p class="note">面板没出现时按顺序查：① 第 2 步是否「已开启」→ ② 油猴图标有无数字角标 → ③ 是否课程/章节页 → ④ F12 控制台过滤「网课助手」。</p>
+    <p class="note">用「网页 AI」答题的话，别关掉本程序的黑色窗口——题目靠它转发。</p>
+  </section>
+
+  <div class="divider"></div>
+  <footer>
+    检测只读本机浏览器配置目录，不会上传。
+    <div class="actions" style="margin-top:12px"><button class="btn small" id="recheck">重新检测</button></div>
+  </footer>
+</div>
+
+<script>
+(function () {
+  var rowsEl = document.getElementById('envRows');
+  var actEl = document.getElementById('envActions');
+  var permEl = document.getElementById('permRows');
+  var permWarn = document.getElementById('permWarn');
+  var extUrlEl = document.getElementById('extUrl');
+  var steps = ['step1', 'step2', 'step3', 'step4'].map(function (id) { return document.getElementById(id); });
+  var installBtns = Array.prototype.slice.call(document.querySelectorAll('#step3 .btn'));
+  var pollDelay = 3000;   // 全部就绪后放慢轮询,别一直 3 秒打一次接口
+
+  function el(tag, cls, html) {
+    var d = document.createElement(tag);
+    if (cls) d.className = cls;
+    if (html != null) d.innerHTML = html;
+    return d;
+  }
+
+  // 三态文案:true 已开启 / false 未开启 / null 读不到
+  function permText(v) {
+    if (v === true) return { tag: 'ok', text: '✓ 已开启' };
+    if (v === false) return { tag: 'no', text: '✗ 未开启' };
+    return { tag: 'no', text: '? 状态未知（旧版浏览器一般默认允许）' };
+  }
+
+  function render(env) {
+    rowsEl.innerHTML = '';
+    actEl.innerHTML = '';
+    permEl.innerHTML = '';
+
+    // ---- 第 3 步:把服务端实际提供的脚本版本标出来 ----
+    var sv = env.scripts || {};
+    var verMain = document.getElementById('verMain');
+    var verNote = document.getElementById('verNote');
+    if (verMain && sv.main && sv.main !== 'unknown') verMain.textContent = ' v' + sv.main;
+    if (verNote && sv.main && sv.main !== 'unknown') {
+      verNote.innerHTML = '本次提供：网课助手 <b>v' + sv.main + '</b>' +
+        (sv.bridge && sv.bridge !== 'unknown' ? '，网页 AI 桥 <b>v' + sv.bridge + '</b>' : '') +
+        '。油猴确认页的版本号应与之相同，不同 = 装到了旧条目。';
+    }
+
+    if (!env.browsers.length) {
+      rowsEl.appendChild(el('div', 'row', '<div class="b"><b>未发现 Chrome / Edge / Brave 配置目录</b></div>'));
+    }
+
+    var blocked = false;   // 明确读到 false
+    var allowed = false;   // 明确读到 true
+
+    env.browsers.forEach(function (b) {
+      var row = el('div', 'row');
+      var info = el('div', 'b');
+      var mgrText = b.managers.length
+        ? b.managers.map(function (m) { return m.name + ' v' + m.version + '（' + m.profile + '）'; }).join('、')
+        : '未检测到脚本管理器';
+      info.appendChild(el('b', null, b.name));
+      info.appendChild(el('span', null, b.profiles.length + ' 个配置 · ' + mgrText));
+      row.appendChild(info);
+      row.appendChild(el('span', 'tag ' + (b.managers.length ? 'ok' : 'no'), b.managers.length ? '✓ 已装好' : '✗ 待安装'));
+      rowsEl.appendChild(row);
+
+      var a = el('a', 'btn small', b.managers.length ? '打开扩展商店页' : '去商店安装 Tampermonkey');
+      a.href = b.store;
+      a.target = '_blank';
+      a.rel = 'noreferrer';
+      actEl.appendChild(a);
+
+      // ---- 第 2 步:每个管理器一行开关状态 ----
+      if (!b.managers.length) return;
+      b.managers.forEach(function (m) {
+        var pr = el('div', 'row');
+        var pb = el('div', 'b');
+        pb.appendChild(el('b', null, m.name + ' · 允许用户脚本'));
+        pr.appendChild(pb);
+        var t = permText(m.userScriptsEnabled);
+        pr.appendChild(el('span', 'tag ' + t.tag, t.text));
+        permEl.appendChild(pr);
+
+        if (m.userScriptsEnabled === true) allowed = true;
+        else if (m.userScriptsEnabled === false) blocked = true;
+      });
+
+      if (b.key === 'edge') extUrlEl.textContent = 'edge://extensions';
+      else if (b.key === 'chrome' || b.key === 'chrome-beta') extUrlEl.textContent = 'chrome://extensions';
+    });
+
+    if (!env.anyManager) {
+      permEl.appendChild(el('div', 'row', '<div class="b"><b>先完成第 1 步</b></div>'));
+    }
+
+    permWarn.classList.toggle('on', blocked);
+    steps[1].classList.toggle('need', blocked);
+    steps[0].classList.toggle('done', !!env.anyManager);
+    steps[1].classList.toggle('done', allowed);
+    steps[2].classList.toggle('done', allowed);
+    steps[3].classList.toggle('done', allowed);
+
+    // 没装管理器时安装按钮变淡(仍可点:个别浏览器读不到扩展目录,不做硬拦)
+    installBtns.forEach(function (b) {
+      b.classList.toggle('dim', !env.anyManager);
+      if (env.anyManager) b.removeAttribute('title');
+      else b.setAttribute('title', '先完成第 1 步:装好 Tampermonkey 再点这里');
+    });
+
+    // 全部就绪后放慢重检频率(3 秒 → 10 秒),省点 CPU
+    pollDelay = (env.anyManager && allowed) ? 10000 : 3000;
+  }
+
+  function load(showSpin) {
+    if (showSpin) rowsEl.innerHTML = '<div class="row"><div class="b"><b><span class="spin"></span>正在检测本机浏览器…</b></div></div>';
+    fetch('/api/env', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(render)
+      .catch(function (e) {
+        rowsEl.innerHTML = '<div class="row"><div class="b"><b>检测接口不可用</b><span>' + (e && e.message || e) + '</span></div></div>';
+      });
+  }
+
+  document.getElementById('recheck').addEventListener('click', function () { load(true); });
+
+  document.getElementById('copyExt').addEventListener('click', function () {
+    var btn = this;
+    var txt = extUrlEl.textContent.trim();
+    var done = function () { btn.textContent = '已复制'; setTimeout(function () { btn.textContent = '复制'; }, 1400); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(done, function () { fallback(); });
+    } else { fallback(); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = txt; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = '请手动复制'; }
+      document.body.removeChild(ta);
+    }
+  });
+
+  load(true);
+  (function tick() {
+    setTimeout(function () { load(false); tick(); }, pollDelay);
+  })();
+})();
+</script>
+</body>
+</html>
