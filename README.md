@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Userscript](https://img.shields.io/badge/userscript-Tampermonkey-blue.svg)](userscripts/courseauto.user.js)
+[![Release](https://img.shields.io/github/v/release/None-wu/courseauto?label=release)](https://github.com/None-wu/courseauto/releases/latest)
 [![CI](https://github.com/None-wu/courseauto/actions/workflows/ci.yml/badge.svg)](https://github.com/None-wu/courseauto/actions/workflows/ci.yml)
 
 > 一个油猴(Tampermonkey)脚本,自动完成网课课程任务点。
@@ -120,6 +121,10 @@ npm run setup
 👉 **[点此一键安装](https://cdn.jsdelivr.net/gh/None-wu/courseauto@main/userscripts/courseauto.user.js)**
 
 > 首次推送后 CDN 需几分钟同步；打不开就稍等重试。
+
+**不想装油猴、或者要给同学用？** 直接下免安装版（Windows，双击即用，自带安装向导）：
+
+👉 **[下载 courseauto-v1.4.0.exe](https://github.com/None-wu/courseauto/releases/latest)**（单文件，含网页 AI 中转；压缩包与使用说明在同一个 Release 里）
 
 > **从旧版升级（v1.3.x → v1.4.0）**：这一版把项目改名为 **courseauto / 刷课助手**，脚本 `@name`、安装地址、
 > 仓库地址全变了，油猴会把它当成一个新脚本。**先在油猴面板删掉旧的「网课助手」，再装新的**，
