@@ -1,8 +1,8 @@
-# 网课助手(学习通 / 智慧树 / 雨课堂)
+# 刷课助手(学习通 / 智慧树 / 雨课堂)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Userscript](https://img.shields.io/badge/userscript-Tampermonkey-blue.svg)](userscripts/xuexitong-autostudy.user.js)
-[![CI](https://github.com/DaRin1403/xuexitong-autostudy/actions/workflows/ci.yml/badge.svg)](https://github.com/DaRin1403/xuexitong-autostudy/actions/workflows/ci.yml)
+[![Userscript](https://img.shields.io/badge/userscript-Tampermonkey-blue.svg)](userscripts/courseauto.user.js)
+[![CI](https://github.com/DaRin1403/courseauto/actions/workflows/ci.yml/badge.svg)](https://github.com/DaRin1403/courseauto/actions/workflows/ci.yml)
 
 > 一个油猴(Tampermonkey)脚本,自动完成网课课程任务点。
 > **v1.3.0 起支持三个平台**:学习通(超星)、智慧树(知到)、雨课堂。
@@ -62,10 +62,10 @@
 ## 📁 项目结构
 
 ```
-xuexitong-autostudy/
+courseauto/
 ├── userscripts/                  # 发布物:两个油猴脚本(由 npm run build 生成,勿手改)
-│   ├── xuexitong-autostudy.user.js      # 主脚本(刷课/答题/面板)
-│   └── xuexitong-webai-bridge.user.js   # 网页 AI 桥(免 Key 答题)
+│   ├── courseauto.user.js               # 主脚本(刷课/答题/面板)
+│   └── courseauto-webai-bridge.user.js  # 网页 AI 桥(免 Key 答题)
 ├── src/                          # 源码:平台无关内核 + 三平台适配器
 │   ├── 00-meta.txt                      # 元数据(@version 是版本号唯一源头)
 │   ├── core/                            # 面板/配置/AI 通道/字体解密/更新检测/主流程
@@ -102,7 +102,7 @@ xuexitong-autostudy/
 ### 方式 A：本地一键安装（推荐）
 
 ```bash
-cd xuexitong-autostudy
+cd courseauto
 npm run setup
 ```
 
@@ -113,18 +113,22 @@ npm run setup
 
 装好油猴后，点这个链接，油猴会弹出安装页：
 
-👉 **[点此一键安装](https://cdn.jsdelivr.net/gh/DaRin1403/xuexitong-autostudy@main/userscripts/xuexitong-autostudy.user.js)**
+👉 **[点此一键安装](https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto.user.js)**
 
 > 首次推送后 CDN 需几分钟同步；打不开就稍等重试。
 
+> **从旧版升级（v1.3.x → v1.4.0）**：这一版把项目改名为 **courseauto / 刷课助手**，脚本 `@name`、安装地址、
+> 仓库地址全变了，油猴会把它当成一个新脚本。**先在油猴面板删掉旧的「网课助手」，再装新的**，
+> 否则两个面板会同时跑；配置（AI Key、倍速等）需要在新面板 ⚙ 里重填一次。
+
 ### 方式 C：手动安装
 
-油猴管理面板 → 左上角「**+**」新建脚本 → 清空编辑器 → 把 `userscripts/xuexitong-autostudy.user.js` 全文粘贴进去 → `Ctrl+S` 保存。
+油猴管理面板 → 左上角「**+**」新建脚本 → 清空编辑器 → 把 `userscripts/courseauto.user.js` 全文粘贴进去 → `Ctrl+S` 保存。
 
 ### 方式 D：打包成 exe 发给别人（客户零环境）
 
 ```bash
-npm run pack        # 产物在 dist/:网课助手-vX.Y.Z.exe + 使用说明.txt + win64.zip
+npm run pack        # 产物在 dist/:刷课助手-vX.Y.Z.exe + 使用说明.txt + win64.zip
 ```
 
 得到的 exe **自带安装向导、两个脚本和网页 AI 中转**,对方不用装 Node、不用敲命令:
@@ -176,7 +180,7 @@ npm run pack        # 产物在 dist/:网课助手-vX.Y.Z.exe + 使用说明.txt
 
 章节测验的自动答题靠大模型完成。**两种方式任选**:
 
-- **网页 AI(免 Key)**:再装一个 `userscripts/xuexitong-webai-bridge.user.js`,打开课程页 → 面板 ⚙ → 勾选「网页 AI 答题」→ 点「打开并连接网页 AI」→ 在弹出的 AI 网页里登录
+- **网页 AI(免 Key)**:再装一个 `userscripts/courseauto-webai-bridge.user.js`,打开课程页 → 面板 ⚙ → 勾选「网页 AI 答题」→ 点「打开并连接网页 AI」→ 在弹出的 AI 网页里登录
 - **API Key(最稳)**:⚙ → 勾选「启用 AI 答题」→ 选平台 → 填 `sk-` 开头的 Key → 保存
   - 推荐 **DeepSeek**(便宜、准);各平台注册地址/接口地址/模型名见 [📄 docs/get-api-key.md](extras/docs/get-api-key.md)
 
@@ -200,7 +204,7 @@ npm run pack        # 产物在 dist/:网课助手-vX.Y.Z.exe + 使用说明.txt
 
 1. 打开上面的登录链接,登录学习通
 2. 进入任意课程 → 打开章节学习页
-3. 页面右下角出现**黑白**「📚 学习通刷课助手」面板 = 已开始自动挂机
+3. 页面右下角出现**黑白**「📚 刷课助手」面板 = 已开始自动挂机
 4. 什么都不用做,挂机即可。浏览器可以最小化,不影响你用电脑(视频已静音)
 
 ### 面板按钮说明
@@ -274,8 +278,8 @@ A: **不建议,风险极高。** 本脚本不包含考试页功能,也请不要�
 ## 🛠 开发与构建
 
 ```bash
-git clone https://github.com/DaRin1403/xuexitong-autostudy.git
-cd xuexitong-autostudy
+git clone https://github.com/DaRin1403/courseauto.git
+cd courseauto
 
 npm run build       # src/ → userscripts/*.user.js,同时同步 version.json 与 package.json 版本号
 npm run mock        # 起本地模拟站点(章节/视频/测验)+ 假 AI,http://127.0.0.1:8790
@@ -309,7 +313,7 @@ npm run test:all    # 10 个套件:学习通主流程/网页AI/测验/新版结�
 
 ## 📄 License
 
-[MIT](LICENSE) © cx-auto-study contributors
+[MIT](LICENSE) © courseauto contributors
 
 ---
 

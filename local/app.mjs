@@ -1,5 +1,5 @@
 // 客户版入口:打包成单个 exe,双击即起本地服务并打开安装向导
-// 打包:node tools/pack.mjs  →  dist/网课助手-vX.exe
+// 打包:node tools/pack.mjs  →  dist/刷课助手-vX.exe
 // 开发:node local/app.mjs   (没打包时自动从磁盘读脚本,行为一致)
 import http from 'node:http';
 import { readFile } from 'node:fs/promises';
@@ -21,7 +21,7 @@ const NO_OPEN = ARGV.includes('--no-open');
 const DATA_DIR = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.xuexitong-assistant'), 'XueXiTongAssistant');
 const PROBE_DIR = path.join(DATA_DIR, 'probe');
 
-const TITLE = '网课助手';
+const TITLE = '刷课助手';
 let VERSION = '';
 
 // 打包版:资源在编译期已内联;开发版:从仓库读文件
@@ -29,8 +29,8 @@ let EMBEDDED = null;
 try { EMBEDDED = (await import('../build/assets.gen.mjs')).ASSETS; } catch { EMBEDDED = null; }
 
 const DISK_FILES = {
-  script: path.join(ROOT, 'userscripts', 'xuexitong-autostudy.user.js'),
-  bridge: path.join(ROOT, 'userscripts', 'xuexitong-webai-bridge.user.js'),
+  script: path.join(ROOT, 'userscripts', 'courseauto.user.js'),
+  bridge: path.join(ROOT, 'userscripts', 'courseauto-webai-bridge.user.js'),
   setup: path.join(__dirname, 'pages', 'setup.html')
 };
 

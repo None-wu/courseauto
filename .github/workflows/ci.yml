@@ -21,15 +21,15 @@ jobs:
 
       - name: 语法检查
         run: |
-          node --check userscripts/xuexitong-autostudy.user.js
-          node --check userscripts/xuexitong-webai-bridge.user.js
+          node --check userscripts/courseauto.user.js
+          node --check userscripts/courseauto-webai-bridge.user.js
 
       - name: 校验版本号三处一致(@version / version.json / package.json)
         run: |
           node -e '
             const fs = require("node:fs");
             const read = (p) => fs.readFileSync(p, "utf8").replace(/^\uFEFF/, "");
-            const v = read("userscripts/xuexitong-autostudy.user.js").match(/@version\s+([\w.\-]+)/)[1];
+            const v = read("userscripts/courseauto.user.js").match(/@version\s+([\w.\-]+)/)[1];
             const j = JSON.parse(read("version.json")).v;
             const p = JSON.parse(read("package.json")).version;
             if (v !== j || v !== p) {

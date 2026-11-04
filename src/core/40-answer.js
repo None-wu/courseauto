@@ -180,7 +180,7 @@
   }
   /* ==================== 网页 AI 通道(免 API Key) ==================== */
   // 同源策略挡住了跨域 DOM,所以不能"打开网页直接 querySelector 抓答案"。
-  // 做法:window.open 打开 AI 网站 → postMessage 把题目发过去 → AI 侧的「学习通网页AI桥」
+  // 做法:window.open 打开 AI 网站 → postMessage 把题目发过去 → AI 侧的「网页AI桥」
   // 脚本负责填入输入框、点发送、等回答稳定,再把文本 postMessage 回来。
   let webAiWin = null;
   let webAiReady = false;
@@ -320,7 +320,7 @@
     try { site = new URL(CONFIG.webAiUrl).host; } catch (e) { /* ignore */ }
     // 先验桥:AI 页的桥不在线就别把题扔进队列干等 60s,快速失败并给可执行指引
     if (site && !(await bridgeOnlineFor(site))) {
-      log(`⚠ ${site} 的网页 AI 桥不在线:请打开「网页 AI 地址」页面(保持登录、别关标签页)并确认装了最新版「学习通网页AI桥」`, 'warn');
+      log(`⚠ ${site} 的网页 AI 桥不在线:请打开「网页 AI 地址」页面(保持登录、别关标签页)并确认装了最新版「网页AI桥」`, 'warn');
       openWebAI();   // 点开始/答题通常紧跟用户操作,顺手尝试弹窗
       await sleep(5);
       if (!(await bridgeOnlineFor(site))) {
@@ -479,7 +479,7 @@
       }
     }
     const reason = CONFIG.webAiEnabled
-      ? '(原因:网页 AI 没返回答案 —— 检查 AI 页面是否打开、是否装了「学习通网页AI桥」)'
+      ? '(原因:网页 AI 没返回答案 —— 检查 AI 页面是否打开、是否装了「网页AI桥」)'
       : (!CONFIG.aiEnabled || !CONFIG.aiKey) ? '(原因:AI 答题未启用,请点 ⚙ 配置)' : '';
     log('未查到答案' + reason, 'warn');
     return [];

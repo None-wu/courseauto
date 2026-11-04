@@ -2,8 +2,8 @@
 * text=auto eol=lf
 
 # 构建产物:由 tools/build.mjs 从 src/ 生成,不参与 diff 统计与语言识别
-userscripts/*.user.js linguist-generated=true -diff
-package-lock.json           linguist-generated=true -diff
+userscripts/*.user.js linguist-generated=true
+package-lock.json           linguist-generated=true
 
 # 二进制
 *.png binary

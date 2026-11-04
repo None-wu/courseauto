@@ -11,8 +11,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
 const PAGES = path.join(ROOT, 'extras', 'mock');
 const PROBE_DIR = path.join(ROOT, 'extras', 'probe');
-const SCRIPT = path.join(ROOT, 'userscripts', 'xuexitong-autostudy.user.js');
-const BRIDGE = path.join(ROOT, 'userscripts', 'xuexitong-webai-bridge.user.js');
+const SCRIPT = path.join(ROOT, 'userscripts', 'courseauto.user.js');
+const BRIDGE = path.join(ROOT, 'userscripts', 'courseauto-webai-bridge.user.js');
 const SETUP_PAGE = path.join(__dirname, 'pages', 'setup.html');
 
 const ASSET_FILES = { script: SCRIPT, bridge: BRIDGE, setup: SETUP_PAGE };
@@ -116,7 +116,7 @@ export function createMockServer() {
         if (p === '/gm-shim.js') {
           const main = await readFile(SCRIPT, 'utf8');
           code = code
-            .replace(/__SCRIPT_NAME__/g, (main.match(/^\s*\/\/\s*@name\s+(.+)$/m) || [, '网课助手'])[1].trim())
+            .replace(/__SCRIPT_NAME__/g, (main.match(/^\s*\/\/\s*@name\s+(.+)$/m) || [, '刷课助手'])[1].trim())
             .replace(/__SCRIPT_VERSION__/g, (main.match(/^\s*\/\/\s*@version\s+(\S+)/m) || [, 'unknown'])[1]);
         }
         res.writeHead(200, { 'Content-Type': 'text/javascript; charset=utf-8', 'Cache-Control': 'no-store' });

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPT = path.join(__dirname, '..', '..', 'userscripts', 'xuexitong-autostudy.user.js');
+const SCRIPT = path.join(__dirname, '..', '..', 'userscripts', 'courseauto.user.js');
 const OUT = path.join(__dirname, 'out');
 
 function findChrome() {

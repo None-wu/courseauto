@@ -21,7 +21,7 @@
     aiModel: 'deepseek-reasoner',
     useTiku: false,         // 免费题库站(已停止免费,默认关闭,纯 AI 答题)
     reportUrl: '',          // 状态上报地址(调试用,留空=关闭);如 http://127.0.0.1:8790/report
-    webAiEnabled: false,    // 网页 AI 答题(免 API Key,需配合「学习通网页AI桥」脚本)
+    webAiEnabled: false,    // 网页 AI 答题(免 API Key,需配合「网页AI桥」脚本)
     webAiBatch: true,       // 整卷模式:整页题目一次性发给网页 AI,批量解析后逐题填写(更快、不易限流;缺漏的题自动回退逐题询问)
     webAiUrl: 'https://chat.deepseek.com/',  // 网页 AI 地址
     webAiRelay: 'http://127.0.0.1:8790',     // 本地中转服务(桥脚本经此收题,AI 页手动打开即可)

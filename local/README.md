@@ -9,7 +9,7 @@ npm run setup      # 检测浏览器 → 起服务 → 自动打开安装向导(
 npm run app        # 客户版入口(不打包也能跑,行为与 exe 一致)
 npm run detect     # 只检测并打印:本机有哪些浏览器、是否装了油猴
 npm run mock       # 开发用:安装接口 + 中转 + 模拟学习通页面
-npm run pack       # 打包成 dist/网课助手-vX.exe(单文件,见 tools/pack.mjs)
+npm run pack       # 打包成 dist/刷课助手-vX.exe(单文件,见 tools/pack.mjs)
 ```
 
 也可以直接跑：`node local/setup.mjs 8800`（自定义端口）。
@@ -33,8 +33,8 @@ npm run pack       # 打包成 dist/网课助手-vX.exe(单文件,见 tools/pack
 | `/setup`、`/` | 安装向导页 |
 | `/api/ping` | 存活探针：客户版用它判断「是否已有本程序在跑」，避免重复启动 |
 | `/api/env` | 返回本机浏览器与油猴检测结果（JSON） |
-| `/install/xuexitong-autostudy.user.js` | 主脚本安装地址。以 `.user.js` 结尾且 `Content-Type: text/javascript`，油猴会拦截并弹出安装页 |
-| `/install/xuexitong-webai-bridge.user.js` | 网页 AI 桥安装地址 |
+| `/install/courseauto.user.js` | 主脚本安装地址。以 `.user.js` 结尾且 `Content-Type: text/javascript`，油猴会拦截并弹出安装页 |
+| `/install/courseauto-webai-bridge.user.js` | 网页 AI 桥安装地址 |
 | `/install/xxx.user.js?download=1` | 强制下载（`Content-Disposition: attachment`） |
 | `/api/webai/ask`、`/next`、`/answer`、`/requeue`、`/status` | 网页 AI 中转：主脚本放题 → 桥脚本取题 → 回传答案 |
 | `/api/probe`、`/api/probe/list` | 适配器自检失败时回传真实页面结构（客户版落盘到 `%LOCALAPPDATA%\XueXiTongAssistant\probe`） |

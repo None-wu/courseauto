@@ -1,6 +1,6 @@
 // 打包客户版:一个 exe,双击即用(内置安装向导 + 两个脚本 + 网页 AI 中转)
 // 用法:node tools/pack.mjs [--no-zip] [--keep]
-//   产物:dist/网课助手-vX.Y.Z.exe + dist/使用说明.txt (+ dist/网课助手-vX.Y.Z-win64.zip)
+//   产物:dist/刷课助手-vX.Y.Z.exe + dist/使用说明.txt (+ dist/刷课助手-vX.Y.Z-win64.zip)
 import { execFileSync, execSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -17,8 +17,8 @@ const KEEP = argv.includes('--keep');
 
 const meta = readFileSync(path.join(ROOT, 'src', '00-meta.txt'), 'utf8');
 const VERSION = (meta.match(/@version\s+(\S+)/) || [, '0.0.0'])[1];
-const SCRIPT = path.join(ROOT, 'userscripts', 'xuexitong-autostudy.user.js');
-const BRIDGE = path.join(ROOT, 'userscripts', 'xuexitong-webai-bridge.user.js');
+const SCRIPT = path.join(ROOT, 'userscripts', 'courseauto.user.js');
+const BRIDGE = path.join(ROOT, 'userscripts', 'courseauto-webai-bridge.user.js');
 const SETUP = path.join(ROOT, 'local', 'pages', 'setup.html');
 
 function step(n, msg) { console.log(`\n[${n}/4] ${msg}`); }
@@ -71,7 +71,7 @@ if (!bun) {
   process.exit(1);
 }
 mkdirSync(DIST, { recursive: true });
-const exeName = `网课助手-v${sv}.exe`;
+const exeName = `刷课助手-v${sv}.exe`;
 const exePath = path.join(DIST, exeName);
 if (existsSync(exePath)) rmSync(exePath);
 
@@ -86,7 +86,7 @@ console.log(`   ✓ ${exeName}  (${mb} MB)`);
 
 // ---- 4. 使用说明 + 压缩包(微信/邮件发大文件时用) ----
 step(4, '生成使用说明');
-const guide = `网课助手 v${sv}  使用说明
+const guide = `刷课助手 v${sv}  使用说明
 ================================================
 
 【这是什么】
@@ -103,12 +103,12 @@ const guide = `网课助手 v${sv}  使用说明
    - Chrome / Edge 用户:点向导第 1 步的商店链接安装扩展
    - 已经装过 Tampermonkey / 脚本猫 / Violentmonkey 的话,这步会显示"已检测到",直接下一步
 
-3) 回向导点"安装「网课助手」",在油猴弹出的页面里点"安装"
+3) 回向导点"安装「刷课助手」",在油猴弹出的页面里点"安装"
    可选:再点"安装「网页 AI 桥」"(用网页版 AI 答网页题时才需要)
 
 4) 点向导第 4 步的网站入口,直接进课程页
    学习通 / 智慧树 / 雨课堂 三个按钮,点哪个进哪个。
-   进课程页后右下角会出现"网课助手"面板:
+   进课程页后右下角会出现"刷课助手"面板:
    - 首次使用:面板 ⚙ → 填 AI Key(DeepSeek 等),或选"网页 AI"模式
    - 然后点"开始"
 
@@ -126,7 +126,7 @@ A: 点"更多信息 → 仍要运行"。这是个人打包程序的常规提示,
 
 Q: 向导里没检测到我装的油猴?
 A: 检测靠读扩展目录,个别浏览器(改过安装路径/绿色版)读不到属正常。
-   只要扩展确实装了,直接点"安装「网课助手」"也能装。
+   只要扩展确实装了,直接点"安装「刷课助手」"也能装。
 
 Q: 脚本装好了但不答题?
 A: 学习通改版会导致选择器失配。面板会提示"自检失败"并把页面结构自动采集到
@@ -143,7 +143,7 @@ const guidePath = path.join(DIST, '使用说明.txt');
 writeFileSync(guidePath, utf8Bom(guide), 'utf8');
 
 if (!NO_ZIP) {
-  const zipName = `网课助手-v${sv}-win64.zip`;
+  const zipName = `刷课助手-v${sv}-win64.zip`;
   const zipPath = path.join(DIST, zipName);
   if (existsSync(zipPath)) rmSync(zipPath);
   try {
@@ -168,7 +168,7 @@ if (!KEEP) {
 }
 
 console.log(`\n完成 → ${DIST}`);
-console.log(`   ${exeName}${existsSync(path.join(DIST, `网课助手-v${sv}-win64.zip`)) ? ` + 网课助手-v${sv}-win64.zip` : ''} + 使用说明.txt`);
+console.log(`   ${exeName}${existsSync(path.join(DIST, `刷课助手-v${sv}-win64.zip`)) ? ` + 刷课助手-v${sv}-win64.zip` : ''} + 使用说明.txt`);
 console.log('   直接把这个 exe(或压缩包)发给客户,双击即可运行。\n');
 
 function utf8Bom(s) { return '\ufeff' + s; }   // 记事本打开中文不乱码

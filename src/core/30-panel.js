@@ -160,7 +160,7 @@
     logPanel.innerHTML =
       '<div id="cxTitle" title="按住此处可拖动面板">' +
         '<span class="cx-brand">📚</span>' +
-        '<span class="cx-name">网课助手</span>' +
+        '<span class="cx-name">刷课助手</span>' +
         '<span class="cx-ver" title="脚本版本(与油猴管理面板一致)">' + (_ver && _ver !== 'unknown' ? 'v' + escHtml(_ver) : 'v?') + '</span>' +
         '<span class="cx-plat">' + activePlatformName() + '</span>' +
         '<span id="cxStatus" class="cx-pill idle"><i></i>待机</span>' +
@@ -327,7 +327,7 @@
       '<div class="sec">🤖 AI 答题 · 网页版(免 Key,优先)</div>' +
       '<div class="field"><div class="row"><div class="label">🌐 网页 AI 答题</div>' +
         '<input id="cfgWebAI" type="checkbox" ' + (CONFIG.webAiEnabled ? 'checked' : '') + '></div>' +
-        '<div class="hint">勾选后不再走 API:脚本打开 AI 网页、把题目发过去、自动填入并发送、再把回答抓回来。需要同时安装「学习通网页AI桥」脚本(仓库同名文件),并已在该网站登录</div></div>' +
+        '<div class="hint">勾选后不再走 API:脚本打开 AI 网页、把题目发过去、自动填入并发送、再把回答抓回来。需要同时安装「网页AI桥」脚本(仓库同名文件),并已在该网站登录</div></div>' +
       '<div class="field"><div class="row"><div class="label">🔗 网页 AI 地址</div></div>' +
         '<input id="cfgWebAiUrl" type="text" value="' + CONFIG.webAiUrl + '">' +
         '<button id="cfgOpenWebAI" type="button" class="ghost" style="margin-top:6px">🔗 打开并连接网页 AI</button>' +

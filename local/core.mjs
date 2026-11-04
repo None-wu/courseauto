@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { scanBrowsers } from './detect.mjs';
 
-export const APP_ID = 'xuexitong-autostudy';
+export const APP_ID = 'courseauto';
 
 // 报告(答题自检工具上报)与网页 AI 中转队列都放内存:客户版不需要落盘,重启即清空
 const reports = [];
@@ -61,8 +61,8 @@ export function versionOf(code) {
  */
 export function createCore({ getAsset, probeDir }) {
   const INSTALL_ROUTES = {
-    '/install/xuexitong-autostudy.user.js': { key: 'script', name: 'xuexitong-autostudy.user.js' },
-    '/install/xuexitong-webai-bridge.user.js': { key: 'bridge', name: 'xuexitong-webai-bridge.user.js' }
+    '/install/courseauto.user.js': { key: 'script', name: 'courseauto.user.js' },
+    '/install/courseauto-webai-bridge.user.js': { key: 'bridge', name: 'courseauto-webai-bridge.user.js' }
   };
 
   return async function handle(req, res, url) {

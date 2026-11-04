@@ -84,7 +84,7 @@
         log('💡 想反馈页面结构?先在本机跑 npm run mock,再刷新本页会自动上传', 'warn');
       });
     } catch (e) { /* ignore */ }
-    console.log('[网课助手] 页面结构采集(' + (reason || '') + '):', collectProbe());
+    console.log('[刷课助手] 页面结构采集(' + (reason || '') + '):', collectProbe());
     return collectProbe();
   }
 
@@ -128,7 +128,7 @@
       return;
     }
 
-    console.log('[网课助手] 当前页面不属于已支持的平台(学习通 / 智慧树 / 雨课堂),脚本待机');
+    console.log('[刷课助手] 当前页面不属于已支持的平台(学习通 / 智慧树 / 雨课堂),脚本待机');
   }
 
   bootAdapter();

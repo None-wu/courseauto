@@ -1,14 +1,14 @@
 // ==UserScript==
-// @name         网课助手(学习通/智慧树/雨课堂)
+// @name         刷课助手(学习通/智慧树/雨课堂)
 // @namespace    cx-auto-study
-// @version      1.3.29
-// @description  多平台网课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
-// @author       cx-auto-study contributors
+// @version      1.4.0
+// @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
+// @author       courseauto contributors
 // @license      MIT
-// @homepageURL  https://github.com/DaRin1403/xuexitong-autostudy
-// @supportURL   https://github.com/DaRin1403/xuexitong-autostudy/issues
-// @updateURL    https://cdn.jsdelivr.net/gh/DaRin1403/xuexitong-autostudy@main/userscripts/xuexitong-autostudy.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/DaRin1403/xuexitong-autostudy@main/userscripts/xuexitong-autostudy.user.js
+// @homepageURL  https://github.com/DaRin1403/courseauto
+// @supportURL   https://github.com/DaRin1403/courseauto/issues
+// @updateURL    https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto.user.js
 // @match        *://*.chaoxing.com/*
 // @match        *://*.zhihuishu.com/*
 // @match        *://*.yuketang.cn/*
@@ -78,7 +78,7 @@
     aiModel: 'deepseek-reasoner',
     useTiku: false,         // 免费题库站(已停止免费,默认关闭,纯 AI 答题)
     reportUrl: '',          // 状态上报地址(调试用,留空=关闭);如 http://127.0.0.1:8790/report
-    webAiEnabled: false,    // 网页 AI 答题(免 API Key,需配合「学习通网页AI桥」脚本)
+    webAiEnabled: false,    // 网页 AI 答题(免 API Key,需配合「网页AI桥」脚本)
     webAiBatch: true,       // 整卷模式:整页题目一次性发给网页 AI,批量解析后逐题填写(更快、不易限流;缺漏的题自动回退逐题询问)
     webAiUrl: 'https://chat.deepseek.com/',  // 网页 AI 地址
     webAiRelay: 'http://127.0.0.1:8790',     // 本地中转服务(桥脚本经此收题,AI 页手动打开即可)
@@ -368,7 +368,7 @@
     logPanel.innerHTML =
       '<div id="cxTitle" title="按住此处可拖动面板">' +
         '<span class="cx-brand">📚</span>' +
-        '<span class="cx-name">网课助手</span>' +
+        '<span class="cx-name">刷课助手</span>' +
         '<span class="cx-ver" title="脚本版本(与油猴管理面板一致)">' + (_ver && _ver !== 'unknown' ? 'v' + escHtml(_ver) : 'v?') + '</span>' +
         '<span class="cx-plat">' + activePlatformName() + '</span>' +
         '<span id="cxStatus" class="cx-pill idle"><i></i>待机</span>' +
@@ -535,7 +535,7 @@
       '<div class="sec">🤖 AI 答题 · 网页版(免 Key,优先)</div>' +
       '<div class="field"><div class="row"><div class="label">🌐 网页 AI 答题</div>' +
         '<input id="cfgWebAI" type="checkbox" ' + (CONFIG.webAiEnabled ? 'checked' : '') + '></div>' +
-        '<div class="hint">勾选后不再走 API:脚本打开 AI 网页、把题目发过去、自动填入并发送、再把回答抓回来。需要同时安装「学习通网页AI桥」脚本(仓库同名文件),并已在该网站登录</div></div>' +
+        '<div class="hint">勾选后不再走 API:脚本打开 AI 网页、把题目发过去、自动填入并发送、再把回答抓回来。需要同时安装「网页AI桥」脚本(仓库同名文件),并已在该网站登录</div></div>' +
       '<div class="field"><div class="row"><div class="label">🔗 网页 AI 地址</div></div>' +
         '<input id="cfgWebAiUrl" type="text" value="' + CONFIG.webAiUrl + '">' +
         '<button id="cfgOpenWebAI" type="button" class="ghost" style="margin-top:6px">🔗 打开并连接网页 AI</button>' +
@@ -868,7 +868,7 @@
   }
   /* ==================== 网页 AI 通道(免 API Key) ==================== */
   // 同源策略挡住了跨域 DOM,所以不能"打开网页直接 querySelector 抓答案"。
-  // 做法:window.open 打开 AI 网站 → postMessage 把题目发过去 → AI 侧的「学习通网页AI桥」
+  // 做法:window.open 打开 AI 网站 → postMessage 把题目发过去 → AI 侧的「网页AI桥」
   // 脚本负责填入输入框、点发送、等回答稳定,再把文本 postMessage 回来。
   let webAiWin = null;
   let webAiReady = false;
@@ -1008,7 +1008,7 @@
     try { site = new URL(CONFIG.webAiUrl).host; } catch (e) { /* ignore */ }
     // 先验桥:AI 页的桥不在线就别把题扔进队列干等 60s,快速失败并给可执行指引
     if (site && !(await bridgeOnlineFor(site))) {
-      log(`⚠ ${site} 的网页 AI 桥不在线:请打开「网页 AI 地址」页面(保持登录、别关标签页)并确认装了最新版「学习通网页AI桥」`, 'warn');
+      log(`⚠ ${site} 的网页 AI 桥不在线:请打开「网页 AI 地址」页面(保持登录、别关标签页)并确认装了最新版「网页AI桥」`, 'warn');
       openWebAI();   // 点开始/答题通常紧跟用户操作,顺手尝试弹窗
       await sleep(5);
       if (!(await bridgeOnlineFor(site))) {
@@ -1167,7 +1167,7 @@
       }
     }
     const reason = CONFIG.webAiEnabled
-      ? '(原因:网页 AI 没返回答案 —— 检查 AI 页面是否打开、是否装了「学习通网页AI桥」)'
+      ? '(原因:网页 AI 没返回答案 —— 检查 AI 页面是否打开、是否装了「网页AI桥」)'
       : (!CONFIG.aiEnabled || !CONFIG.aiKey) ? '(原因:AI 答题未启用,请点 ⚙ 配置)' : '';
     log('未查到答案' + reason, 'warn');
     return [];
@@ -1418,7 +1418,7 @@
       try {
         if (PAUSED || running) return; // 有任务进行中不打断
         const myV = (typeof GM_info !== 'undefined' && GM_info.script) ? GM_info.script.version : '0';
-        const text = await cxFetch('https://cdn.jsdelivr.net/gh/DaRin1403/xuexitong-autostudy@main/version.json', { timeout: 10000 });
+        const text = await cxFetch('https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/version.json', { timeout: 10000 });
         // 有些编辑器会在 UTF-8 文件头写 BOM,JSON.parse 会直接抛错 → 先剥掉再解析
         const obj = JSON.parse(String(text || '').replace(/^\uFEFF/, '').trim());
         const remoteV = String(obj.v || '');
@@ -3529,7 +3529,7 @@
         log('💡 想反馈页面结构?先在本机跑 npm run mock,再刷新本页会自动上传', 'warn');
       });
     } catch (e) { /* ignore */ }
-    console.log('[网课助手] 页面结构采集(' + (reason || '') + '):', collectProbe());
+    console.log('[刷课助手] 页面结构采集(' + (reason || '') + '):', collectProbe());
     return collectProbe();
   }
 
@@ -3573,7 +3573,7 @@
       return;
     }
 
-    console.log('[网课助手] 当前页面不属于已支持的平台(学习通 / 智慧树 / 雨课堂),脚本待机');
+    console.log('[刷课助手] 当前页面不属于已支持的平台(学习通 / 智慧树 / 雨课堂),脚本待机');
   }
 
   bootAdapter();

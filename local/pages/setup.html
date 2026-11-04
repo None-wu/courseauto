@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>网课助手 · 一键安装</title>
+<title>刷课助手 · 一键安装</title>
 <style>
   :root{color-scheme:dark}
   *{box-sizing:border-box}
@@ -117,8 +117,8 @@
   <section id="step3">
     <h2><span class="num">3</span>装入脚本</h2>
     <div class="actions">
-      <a class="btn primary" href="/install/xuexitong-autostudy.user.js">安装「网课助手」<span id="verMain"></span></a>
-      <a class="btn" href="/install/xuexitong-webai-bridge.user.js">安装「网页 AI 桥」（可选）</a>
+      <a class="btn primary" href="/install/courseauto.user.js">安装「刷课助手」<span id="verMain"></span></a>
+      <a class="btn" href="/install/courseauto-webai-bridge.user.js">安装「网页 AI 桥」（可选）</a>
     </div>
     <p class="note">点「安装」后油猴会弹出确认页，再点一次「安装」即可；没反应 = 第 1 步没装好。</p>
     <p class="note" id="verNote">油猴确认页顶部显示的版本号应与本页一致，不一致说明装的是旧条目。</p>
@@ -146,8 +146,8 @@
         <span class="kind">学堂在线 · 视频/弹题</span>
       </a>
     </div>
-    <p class="note"><b>进课程页后看右下角</b>：出现「网课助手」面板 = 装好了。首次使用点面板 ⚙ 填 AI Key（或选「网页 AI」），再点「开始」。</p>
-    <p class="note">面板没出现时按顺序查：① 第 2 步是否「已开启」→ ② 油猴图标有无数字角标 → ③ 是否课程/章节页 → ④ F12 控制台过滤「网课助手」。</p>
+    <p class="note"><b>进课程页后看右下角</b>：出现「刷课助手」面板 = 装好了。首次使用点面板 ⚙ 填 AI Key（或选「网页 AI」），再点「开始」。</p>
+    <p class="note">面板没出现时按顺序查：① 第 2 步是否「已开启」→ ② 油猴图标有无数字角标 → ③ 是否课程/章节页 → ④ F12 控制台过滤「刷课助手」。</p>
     <p class="note">用「网页 AI」答题的话，别关掉本程序的黑色窗口——题目靠它转发。</p>
   </section>
 
@@ -194,7 +194,7 @@
     var verNote = document.getElementById('verNote');
     if (verMain && sv.main && sv.main !== 'unknown') verMain.textContent = ' v' + sv.main;
     if (verNote && sv.main && sv.main !== 'unknown') {
-      verNote.innerHTML = '本次提供：网课助手 <b>v' + sv.main + '</b>' +
+      verNote.innerHTML = '本次提供：刷课助手 <b>v' + sv.main + '</b>' +
         (sv.bridge && sv.bridge !== 'unknown' ? '，网页 AI 桥 <b>v' + sv.bridge + '</b>' : '') +
         '。油猴确认页的版本号应与之相同，不同 = 装到了旧条目。';
     }

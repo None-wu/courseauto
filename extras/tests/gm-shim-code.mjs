@@ -6,11 +6,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SHIM = path.join(__dirname, '..', '..', 'local', 'lib', 'gm-shim.js');
-const SCRIPT = path.join(__dirname, '..', '..', 'userscripts', 'xuexitong-autostudy.user.js');
+const SCRIPT = path.join(__dirname, '..', '..', 'userscripts', 'courseauto.user.js');
 
 export async function loadGmShimCode() {
   const [shim, main] = await Promise.all([readFile(SHIM, 'utf8'), readFile(SCRIPT, 'utf8')]);
-  const name = (main.match(/^\s*\/\/\s*@name\s+(.+)$/m) || [, '网课助手'])[1].trim();
+  const name = (main.match(/^\s*\/\/\s*@name\s+(.+)$/m) || [, '刷课助手'])[1].trim();
   const version = (main.match(/^\s*\/\/\s*@version\s+(\S+)/m) || [, 'unknown'])[1];
   return shim.replace(/__SCRIPT_NAME__/g, name).replace(/__SCRIPT_VERSION__/g, version);
 }

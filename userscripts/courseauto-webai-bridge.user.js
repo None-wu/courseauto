@@ -1,13 +1,13 @@
 // ==UserScript==
-// @name         学习通网页AI桥
+// @name         刷课助手 · 网页AI桥
 // @namespace    cx-auto-study
 // @version      1.2.0
-// @description  配合「学习通刷课助手」使用:接收题目 → 自动填入网页版 AI 输入框 → 发送 → 抓取回答 → 回传。免 API Key。
-// @author       cx-auto-study contributors
+// @description  配合「刷课助手」使用:接收题目 → 自动填入网页版 AI 输入框 → 发送 → 抓取回答 → 回传。免 API Key。
+// @author       courseauto contributors
 // @license      MIT
-// @homepageURL  https://github.com/DaRin1403/xuexitong-autostudy
-// @updateURL    https://cdn.jsdelivr.net/gh/DaRin1403/xuexitong-autostudy@main/userscripts/xuexitong-webai-bridge.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/DaRin1403/xuexitong-autostudy@main/userscripts/xuexitong-webai-bridge.user.js
+// @homepageURL  https://github.com/DaRin1403/courseauto
+// @updateURL    https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto-webai-bridge.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto-webai-bridge.user.js
 // @match        *://chat.deepseek.com/*
 // @match        *://chatgpt.com/*
 // @match        *://chat.openai.com/*
@@ -28,7 +28,7 @@
 // ==/UserScript==
 //
 // ⚠️ 说明
-// 1. 必须与「学习通刷课助手」同时启用,并在本页面保持登录。
+// 1. 必须与「刷课助手」同时启用,并在本页面保持登录。
 // 2. 同源策略下主页面读不到本页 DOM,一切都走 postMessage,所以两边缺一不可。
 // 3. 各 AI 站点改版会导致选择器失效,失效表现是"答不上来",不会乱填。
 
@@ -673,7 +673,7 @@
       const make = () => {
         const el = document.createElement('div');
         el.textContent = '桥 ' + BRIDGE_VER;
-        el.title = '学习通网页AI桥(红=未连上中转,绿=正常)';
+        el.title = '网页AI桥(红=未连上中转,绿=正常)';
         el.style.cssText = 'position:fixed;right:8px;bottom:8px;z-index:2147483647;background:rgba(190,60,60,.85);color:#fff;font-size:11px;line-height:1;padding:4px 8px;border-radius:10px;opacity:.8;pointer-events:none';
         document.body.appendChild(el);
         window.__cxBridgeBadge = el;

@@ -1,14 +1,14 @@
 // ==UserScript==
-// @name         网课助手(学习通/智慧树/雨课堂)
+// @name         刷课助手(学习通/智慧树/雨课堂)
 // @namespace    cx-auto-study
-// @version      1.3.29
-// @description  多平台网课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
-// @author       cx-auto-study contributors
+// @version      1.4.0
+// @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
+// @author       courseauto contributors
 // @license      MIT
-// @homepageURL  https://github.com/DaRin1403/xuexitong-autostudy
-// @supportURL   https://github.com/DaRin1403/xuexitong-autostudy/issues
-// @updateURL    https://cdn.jsdelivr.net/gh/DaRin1403/xuexitong-autostudy@main/userscripts/xuexitong-autostudy.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/DaRin1403/xuexitong-autostudy@main/userscripts/xuexitong-autostudy.user.js
+// @homepageURL  https://github.com/DaRin1403/courseauto
+// @supportURL   https://github.com/DaRin1403/courseauto/issues
+// @updateURL    https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto.user.js
 // @match        *://*.chaoxing.com/*
 // @match        *://*.zhihuishu.com/*
 // @match        *://*.yuketang.cn/*

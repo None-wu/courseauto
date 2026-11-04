@@ -1,6 +1,6 @@
 // 构建:把 src/ 下的内核与适配器内联成单个油猴脚本
 // 用法:node tools/build.mjs [--check]
-// 产物:userscripts/xuexitong-autostudy.user.js
+// 产物:userscripts/courseauto.user.js
 import { readFile, writeFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, '..');
-const OUT = path.join(ROOT, 'userscripts', 'xuexitong-autostudy.user.js');
+const OUT = path.join(ROOT, 'userscripts', 'courseauto.user.js');
 
 // 顺序即拼接顺序:元数据 → 注册表 → 内核 → 适配器 → 启动 → 收尾
 const PARTS = [

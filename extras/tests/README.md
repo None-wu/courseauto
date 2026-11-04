@@ -26,7 +26,7 @@ npm run test:headed    # 开真实浏览器窗口看全过程
 | `out/run.png` `out/run.log` | 最近一次运行的截图与完整日志 |
 | `out/check-*.mjs` | 临时截图脚本（配置面板、安装向导页） |
 
-被测脚本路径固定为 `../userscripts/xuexitong-autostudy.user.js`；模拟站点、页面、GM 垫片都在 `../local/`，测试与安装器共用一份，避免两套 DOM 契约漂移。
+被测脚本路径固定为 `../userscripts/courseauto.user.js`；模拟站点、页面、GM 垫片都在 `../local/`，测试与安装器共用一份，避免两套 DOM 契约漂移。
 
 ## 覆盖的场景
 

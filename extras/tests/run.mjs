@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCRIPT = path.join(__dirname, '..', '..', 'userscripts', 'xuexitong-autostudy.user.js');
+const SCRIPT = path.join(__dirname, '..', '..', 'userscripts', 'courseauto.user.js');
 const OUT = path.join(__dirname, 'out');
 
 function findChrome() {
@@ -51,19 +51,22 @@ async function main() {
   await context.addInitScript({ content: await loadGmShimCode() });
 
   // --webai:把配置切到「网页 AI」通道,指向本地模拟的 AI 对话页
+  // 中转地址也指向 mock 自己的端口(默认 8790 是真实客户环境,测试机上通常没起 → 会误判"桥不在线")
   if (webai) {
-    await context.addInitScript(({ u }) => {
+    await context.addInitScript(({ u, relay }) => {
       try {
         const k = 'cxMock:cxConfig';
         const raw = localStorage.getItem(k);
         const cfg = raw ? JSON.parse(raw) : {};
         cfg.webAiEnabled = true;
         cfg.webAiUrl = u;
+        cfg.webAiRelay = relay;
         cfg.aiEnabled = false;
         localStorage.setItem(k, JSON.stringify(cfg));
+        localStorage.setItem('cxRelay', relay);   // 桥脚本读这个:让它把心跳打到 mock 而不是 8790
       } catch (e) { /* ignore */ }
-    }, { u: `${base}/ai` });
-    console.log('[mock] 通道切换:网页 AI(模拟对话页 ' + base + '/ai）\n');
+    }, { u: `${base}/ai`, relay: base });
+    console.log('[mock] 通道切换:网页 AI(模拟对话页 ' + base + '/ai,中转 ' + base + ')\n');
   }
 
   const page = await context.newPage();
