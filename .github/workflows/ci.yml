@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 构建油猴脚本(源码 → userscripts/*.user.js)
+        run: node tools/build.mjs
+
+      - name: 语法检查
+        run: |
+          node --check userscripts/xuexitong-autostudy.user.js
+          node --check userscripts/xuexitong-webai-bridge.user.js
+
+      - name: 校验版本号三处一致(@version / version.json / package.json)
+        run: |
+          node -e '
+            const fs = require("node:fs");
+            const read = (p) => fs.readFileSync(p, "utf8").replace(/^\uFEFF/, "");
+            const v = read("userscripts/xuexitong-autostudy.user.js").match(/@version\s+([\w.\-]+)/)[1];
+            const j = JSON.parse(read("version.json")).v;
+            const p = JSON.parse(read("package.json")).version;
+            if (v !== j || v !== p) {
+              console.error(`版本不一致: 脚本 ${v} / version.json ${j} / package.json ${p}`);
+              process.exit(1);
+            }
+            console.log("版本一致:", v);
+          '
+
+      - name: 构建产物与仓库一致(忘了提交构建结果会在这里失败)
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::构建后仓库有改动,请本地执行 npm run build 并提交 userscripts/"
+            git status --short
+            exit 1
+          fi
