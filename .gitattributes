@@ -1,0 +1,13 @@
+# 统一换行:仓库里存 LF,Windows 检出按需转换
+* text=auto eol=lf
+
+# 构建产物:由 tools/build.mjs 从 src/ 生成,不参与 diff 统计与语言识别
+userscripts/*.user.js linguist-generated=true -diff
+package-lock.json           linguist-generated=true -diff
+
+# 二进制
+*.png binary
+*.jpg binary
+*.ico binary
+*.exe binary
+*.zip binary
