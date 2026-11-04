@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dowork · 判断题三种真实版本(模拟)</title>
+<style>
+  body { margin: 0; padding: 12px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #333; background: #fff; }
+  .questionLi { border: 1px solid #e5e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .mark_name { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  .colorShallow { color: #8a90a2; font-weight: 400; }
+  ul { list-style: none; padding: 0; margin: 6px 0 0; }
+  li { padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
+  li:hover { background: #f3f7ff; }
+  .num_option { color: #8a90a2; margin-right: 4px; }
+  .answerBg { padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
+  .answerBg.check_answer { border-color: #2e6bd6; background: #eef4ff; }
+  #bar { margin-top: 8px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h3>第 2 章 · 章节测验（判断题三种版本混排：label 联动 / div 式无 input / value=对·错）</h3>
+<div id="list"></div>
+<div id="bar">未提交</div>
+<script>
+  // 复现真实环境里判断题的三种写法（都是学习通不同版本的真实形态）：
+  // Q1: radio 隐藏，只有 label 能选中（点 li 无效）——老逻辑点 li 会"假成功"
+  // Q2: 没有 input，div 式选项靠 JS 加 class ——老逻辑只找 ul li，直接判"无答案"
+  // Q3: radio 的 value 是"对/错"而不是 true/false ——老逻辑只认 true/false
+  var list = document.getElementById('list');
+
+  function shell(id, title) {
+    var box = document.createElement('div');
+    box.className = 'questionLi';
+    box.id = 'q' + id;
+    var name = document.createElement('h3');
+    name.className = 'mark_name';
+    name.innerHTML = '<span class="colorShallow">[判断题]</span>' + title + '（2.0分）';
+    box.appendChild(name);
+    list.appendChild(box);
+    return box;
+  }
+
+  // ---- Q1: label[for] 联动，点 li 不选中 ----
+  var q1 = shell(0, 'HTTPS 默认使用 443 端口。');
+  var ul1 = document.createElement('ul');
+  [['true', '正确'], ['false', '错误']].forEach(function (pair, i) {
+    var li = document.createElement('li');
+    li.className = 'answer_p';
+    var letter = String.fromCharCode(65 + i);
+    li.innerHTML = '<input type="radio" id="j1' + i + '" name="q0" value="' + pair[0] + '" style="display:none">' +
+      '<label for="j1' + i + '"><span class="num_option">' + letter + '、</span>' + pair[1] + '</label>';
+    ul1.appendChild(li);
+  });
+  q1.appendChild(ul1);
+
+  // ---- Q2: div 式选项，无 input，点击加 class ----
+  var q2 = shell(1, '地球是平的。');
+  [['true', '正确'], ['false', '错误']].forEach(function (pair, i) {
+    var d = document.createElement('div');
+    d.className = 'answerBg';
+    d.setAttribute('data-v', pair[0]);
+    d.innerHTML = '<span class="num_option">' + String.fromCharCode(65 + i) + '、</span><span class="after">' + pair[1] + '</span>';
+    d.addEventListener('click', function () {
+      Array.prototype.forEach.call(q2.querySelectorAll('.answerBg'), function (x) { x.classList.remove('check_answer'); });
+      d.classList.add('check_answer');
+    });
+    q2.appendChild(d);
+  });
+
+  // ---- Q3: radio value=对/错，点 li 可选中 ----
+  var q3 = shell(2, '水在标准大气压下的沸点是 100°C。');
+  var ul3 = document.createElement('ul');
+  [['对', '正确'], ['错', '错误']].forEach(function (pair, i) {
+    var li = document.createElement('li');
+    li.className = 'answer_p';
+    li.innerHTML = '<span class="num_option">' + String.fromCharCode(65 + i) + '、</span><span>' + pair[1] + '</span>';
+    var inp = document.createElement('input');
+    inp.type = 'radio';
+    inp.name = 'q2';
+    inp.value = pair[0];
+    inp.style.display = 'none';
+    li.appendChild(inp);
+    li.addEventListener('click', function () { inp.checked = true; });
+    ul3.appendChild(li);
+  });
+  q3.appendChild(ul3);
+
+  // ---- Q4: 选项文字是乱码(字体加密没解开),只能靠选项顺序/取值兜底 ----
+  var q4 = shell(3, 'HTTP 是明文传输协议。');
+  var ul4 = document.createElement('ul');
+  [['A', '悂'], ['B', '惖']].forEach(function (pair, i) {
+    var li = document.createElement('li');
+    li.className = 'answer_p';
+    li.innerHTML = '<span class="num_option">' + pair[0] + '、</span><span class="after">' + pair[1] + '</span>';
+    var inp = document.createElement('input');
+    inp.type = 'radio';
+    inp.name = 'q3';
+    inp.value = pair[0];
+    inp.style.display = 'none';
+    li.appendChild(inp);
+    li.addEventListener('click', function () { inp.checked = true; });
+    ul4.appendChild(li);
+  });
+  q4.appendChild(ul4);
+
+  // ---- Q5: div 式选项 + 文字乱码(无 input、文字读不出),只能按容器顺序兜底 ----
+  var q5 = shell(4, 'HTTPS 使用 443 端口以外的端口通信。');
+  [['true', '悂'], ['false', '惖']].forEach(function (pair, i) {
+    var d = document.createElement('div');
+    d.className = 'answerBg';
+    d.setAttribute('data-v', pair[0]);
+    d.innerHTML = '<span class="num_option">' + String.fromCharCode(65 + i) + '、</span><span class="after">' + pair[1] + '</span>';
+    d.addEventListener('click', function () {
+      Array.prototype.forEach.call(q5.querySelectorAll('.answerBg'), function (x) { x.classList.remove('check_answer'); });
+      d.classList.add('check_answer');
+    });
+    q5.appendChild(d);
+  });
+
+  // ---- Q6: 无 radio、无 label,事件委托绑在内层 <a> 上,选中标记加在容器 class ——老逻辑点 li/span 没反应 ----
+  var q6 = shell(5, '数据加密后传输可以防止窃听。');
+  [['true', '悂'], ['false', '惖']].forEach(function (pair, i) {
+    var d = document.createElement('div');
+    d.className = 'answerBg';
+    d.setAttribute('data-v', pair[0]);
+    // 内层结构模拟真实页面:字母 + 乱码文字,可点的是 <a>(老逻辑不点 a)
+    d.innerHTML = '<span class="num_option">' + String.fromCharCode(65 + i) + '、</span><a class="opt-link"><span class="after">' + pair[1] + '</span></a>';
+    d.querySelector('a').addEventListener('click', function (ev) {
+      ev.stopPropagation();
+      Array.prototype.forEach.call(q6.querySelectorAll('.answerBg'), function (x) { x.classList.remove('check_answer'); });
+      d.classList.add('check_answer');
+    });
+    q6.appendChild(d);
+  });
+
+  // ---- Q7: 无 radio、字母与对错连写("A对"/"B错",无分隔符),处理器只监听 pointerdown —— 老逻辑点不中 ----
+  var q7 = shell(6, '现在常用的哈希算法是可逆的。');
+  [['true', 'A', '对'], ['false', 'B', '错']].forEach(function (pair) {
+    var li = document.createElement('li');
+    li.className = 'before after';
+    li.setAttribute('data-v', pair[0]);
+    li.innerHTML = '<span class="num_option">' + pair[1] + '</span>' + pair[2];
+    li.addEventListener('pointerdown', function () {
+      Array.prototype.forEach.call(q7.querySelectorAll('li'), function (x) { x.classList.remove('check_answer'); });
+      li.classList.add('check_answer');
+    });
+    q7.appendChild(li);
+  });
+
+  // ---- Q8: 真实探针结构(2026-11-04 抓取):li onclick="addChoice(this)",无 radio,
+  //      addChoice 只写 answer<qid> 隐藏域、不加任何 class —— 点击"看起来没反应"但答案已记录 ----
+  var QID8 = 403072800;
+  window.addChoice = function (li) {
+    var qid = li.getAttribute('qid');
+    var sp = li.querySelector('.num_option');
+    var inp = document.getElementById('answer' + qid);
+    if (inp) inp.value = sp ? (sp.getAttribute('data') || '') : '';
+  };
+  var q8 = shell(7, '人工智能会取代所有工作。');
+  var ul8 = document.createElement('ul');
+  ul8.className = 'Zy_ulTop w-top';
+  [['A', '对'], ['B', '错']].forEach(function (pair) {
+    var li = document.createElement('li');
+    li.className = 'before-after';
+    li.setAttribute('onclick', 'addChoice(this);');
+    li.setAttribute('qid', String(QID8));
+    li.setAttribute('qtype', '3');
+    li.setAttribute('role', 'radio');
+    li.setAttribute('aria-label', pair[0] + ' ' + pair[1] + '选择');
+    li.innerHTML = '<label class="fl before"><span class="num_option" data="' + pair[0] + '">' + pair[0] + '</span></label>' +
+      '<a tabindex="-1" href="javascript:void(0);" class="fl after">' + pair[1] + '</a><div class="clear"></div>';
+    ul8.appendChild(li);
+  });
+  q8.appendChild(ul8);
+  var hid8 = document.createElement('input');
+  hid8.type = 'hidden'; hid8.name = 'answer' + QID8; hid8.id = 'answer' + QID8; hid8.value = '';
+  q8.appendChild(hid8);
+  var hid8t = document.createElement('input');
+  hid8t.type = 'hidden'; hid8t.id = 'answertype' + QID8; hid8t.value = '3';
+  q8.appendChild(hid8t);
+
+  // 真实 dowork 的提交入口
+  window.btnBlueSubmit = function () {
+    window.__submitted = true;
+    window.__submittedAt = Date.now();
+    document.getElementById('bar').textContent = '已提交（模拟）';
+    document.getElementById('bar').style.color = '#16a34a';
+  };
+  window.submitCheckTimes = function () {};
+  window.noSubmit = function () { window.__noSubmit = true; };
+</script>
+</body>
+</html>

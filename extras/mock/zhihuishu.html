@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>智慧树 · 模拟视频学习页</title>
+<style>
+  body { margin:0; font:14px/1.6 "Microsoft YaHei",sans-serif; background:#14161a; color:#e6e6e8; }
+  .wrap { display:flex; min-height:100vh; }
+  .catalogue { width:260px; margin:0; padding:12px; list-style:none; background:#1b1e24; border-right:1px solid #2a2e36; }
+  .catalogue li { padding:9px 10px; border-radius:6px; cursor:pointer; color:#b9bcc4; font-size:13px; }
+  .catalogue li:hover { background:#23262e; }
+  .catalogue li.active { background:#2f3440; color:#fff; }
+  .catalogue li.done::after { content:" ✓"; color:#8ad48a; }
+  .videoArea { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px; gap:14px; }
+  #vjs_container { width:640px; height:360px; background:#000; display:flex; align-items:center; justify-content:center; border-radius:8px; position:relative; }
+  #vjs_container video { width:100%; height:100%; background:#0b0b0d; }
+  .tip { font-size:12px; color:#7b7f88; }
+  .dialog-body { position:absolute; inset:auto 0 0 0; background:#20242c; border:1px solid #343a45; border-radius:10px; padding:14px 16px; width:420px; margin:0 auto 18px; }
+  .dialog-body .stem { font-size:14px; margin-bottom:10px; color:#fff; }
+  .dialog-body ul { margin:0; padding:0; list-style:none; display:flex; flex-direction:column; gap:7px; }
+  .dialog-body li { padding:7px 10px; border:1px solid #343a45; border-radius:6px; cursor:pointer; font-size:13px; }
+  .dialog-body li:hover { border-color:#666; }
+  .dialog-body li.selected { background:#3a4150; border-color:#8a93a5; }
+  .dialog-body button { margin-top:12px; padding:7px 16px; border-radius:7px; border:none; background:#f0f0f2; color:#111; cursor:pointer; font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <ul class="catalogue">
+    <li class="clearfix video active" data-i="0"><span class="title">1.1 课程绪论</span></li>
+    <li class="clearfix video" data-i="1"><span class="title">1.2 基本概念</span></li>
+    <li class="clearfix video" data-i="2"><span class="title">1.3 章节小结</span></li>
+  </ul>
+  <div class="videoArea">
+    <div id="vjs_container"><video playsinline></video></div>
+    <div class="tip">模拟智慧树播放页 · 视频为伪播放器(时长 40s,可选弹题)</div>
+  </div>
+</div>
+<script>
+(function () {
+  var nodes = Array.prototype.slice.call(document.querySelectorAll('.catalogue li'));
+  var v = document.querySelector('video');
+  var DUR = 40;
+  var t = 0, paused = true, ended = false, muted = false, rate = 1;
+  var cur = 0, popupDone = false, popupShown = false;
+  var state = { popupAnswered: null, popupSeen: 0 };
+
+  Object.defineProperty(v, 'duration', { get: function () { return DUR; } });
+  Object.defineProperty(v, 'currentTime', { get: function () { return t; }, set: function (x) { t = x; } });
+  Object.defineProperty(v, 'paused', { get: function () { return paused; } });
+  Object.defineProperty(v, 'ended', { get: function () { return ended; } });
+  Object.defineProperty(v, 'muted', { get: function () { return muted; }, set: function (x) { muted = !!x; } });
+  Object.defineProperty(v, 'playbackRate', { get: function () { return rate; }, set: function (x) { rate = Number(x) || 1; } });
+  v.play = function () { paused = false; return Promise.resolve(); };
+  v.pause = function () { paused = true; };
+
+  function showPopup() {
+    popupShown = true;
+    paused = true;
+    state.popupSeen++;
+    var box = document.createElement('div');
+    box.className = 'dialog-body';
+    box.innerHTML = '<div class="stem">1+1 等于几？</div>' +
+      '<ul><li>A. 1</li><li>B. 2</li><li>C. 3</li><li>D. 4</li></ul>' +
+      '<button id="zhsContinue">继续学习</button>';
+    document.getElementById('vjs_container').appendChild(box);
+    Array.prototype.forEach.call(box.querySelectorAll('li'), function (li, i) {
+      li.addEventListener('click', function () {
+        Array.prototype.forEach.call(box.querySelectorAll('li'), function (x) { x.classList.remove('selected'); });
+        li.classList.add('selected');
+        state.popupAnswered = i;
+      });
+    });
+    box.querySelector('#zhsContinue').addEventListener('click', function () {
+      box.remove();
+      popupDone = true;
+      paused = false;
+    });
+  }
+
+  setInterval(function () {
+    if (!paused && !ended) {
+      t += 2;
+      if (t >= 12 && !popupShown && !popupDone) showPopup();
+      if (t >= DUR) {
+        ended = true;
+        paused = true;
+        nodes[cur].classList.add('done');
+        nodes[cur].classList.remove('active');
+      }
+    }
+  }, 250);
+
+  nodes.forEach(function (li, i) {
+    li.addEventListener('click', function () {
+      nodes.forEach(function (x) { x.classList.remove('active'); });
+      li.classList.add('active');
+      cur = i; t = 0; ended = false; paused = true; popupShown = false; popupDone = false;
+      var b = document.querySelector('.dialog-body'); if (b) b.remove();
+    });
+  });
+
+  window.__zhs = {
+    get state() { return { cur: cur, t: t, paused: paused, muted: muted, rate: rate, ended: ended, popupAnswered: state.popupAnswered, popupSeen: state.popupSeen }; }
+  };
+})();
+</script>
+</body>
+</html>

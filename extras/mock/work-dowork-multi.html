@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dowork · 多选题四种真实版本(模拟)</title>
+<style>
+  body { margin: 0; padding: 12px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #333; background: #fff; }
+  .questionLi { border: 1px solid #e5e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .mark_name { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  .colorShallow { color: #8a90a2; font-weight: 400; }
+  ul { list-style: none; padding: 0; margin: 6px 0 0; }
+  li { padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
+  li:hover { background: #f3f7ff; }
+  li.check_answer { border-color: #2e6bd6; background: #eef4ff; }
+  .num_option { color: #8a90a2; margin-right: 4px; }
+  .answerBg { padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
+  .answerBg.check_answer { border-color: #2e6bd6; background: #eef4ff; }
+  #bar { margin-top: 8px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h3>第 3 章 · 章节测验(多选:addChoice+隐藏域 / 处理器在内层a / div 式 / 旧式 checkbox)</h3>
+<div id="list"></div>
+<div id="bar">未提交</div>
+<script>
+  // 复现真实环境里多选题的四种写法:
+  // Q1 新版学习通:li[onclick=addChoice(this)] + qid + answer<qid> 隐藏域,toggle 式(点两次=取消,老逻辑必坏)
+  // Q2 处理器只绑在内层 <a> 且 stopPropagation,点 li 无效
+  // Q3 div 式选项,无 input 无隐藏域,靠 class 表达选中
+  // Q4 旧式 ul li > checkbox,点击委托在 li 上(toggle)
+  var list = document.getElementById('list');
+
+  function shell(id, title) {
+    var box = document.createElement('div');
+    box.className = 'questionLi';
+    box.id = 'q' + id;
+    var name = document.createElement('h3');
+    name.className = 'mark_name';
+    name.innerHTML = '<span class="colorShallow">[多选题]</span>' + title + '（2.0分）';
+    box.appendChild(name);
+    list.appendChild(box);
+    return box;
+  }
+  function hiddenIn(el, qid) {
+    var h = document.createElement('input');
+    h.type = 'hidden';
+    h.id = 'answer' + qid;
+    h.name = 'answer' + qid;
+    el.appendChild(h);
+    return h;
+  }
+  function toggleData(hid, data) {
+    var cur = String(hid.value || '');
+    var i = cur.indexOf(data);
+    if (i >= 0) return cur.slice(0, i) + cur.slice(i + data.length);
+    return cur + data;
+  }
+
+  // ---- Q1: 新版 addChoice + answer<qid> 隐藏域(toggle) ----
+  var q1 = shell(0, '以下属于 HTTP 请求方法的有：');
+  var hid1 = hiddenIn(q1, 101);
+  var ul1 = document.createElement('ul');
+  ['GET', 'POST', 'FTP', 'PUT'].forEach(function (o, i) {
+    var li = document.createElement('li');
+    var letter = String.fromCharCode(65 + i);
+    li.setAttribute('qid', '101');
+    li.setAttribute('role', 'radio');
+    li.setAttribute('onclick', 'addChoice(this)');
+    li.innerHTML = '<span class="num_option" data="' + letter + '">' + letter + '、</span><span class="after">' + o + '</span>';
+    ul1.appendChild(li);
+  });
+  q1.appendChild(ul1);
+
+  window.addChoice = function (li) {
+    var qid = li.getAttribute('qid');
+    var hid = document.getElementById('answer' + qid);
+    var data = li.querySelector('.num_option').getAttribute('data');
+    var before = String(hid.value || '');
+    hid.value = toggleData(hid, data);
+    if (String(hid.value).indexOf(data) >= 0) li.classList.add('check_answer');
+    else li.classList.remove('check_answer');
+    if (before === hid.value) console.log('[mock] addChoice 无变化');
+  };
+
+  // ---- Q2: 处理器只在内层 a,且阻止冒泡 ----
+  var q2 = shell(1, '下列 HTTP 常见方法包括：');
+  var hid2 = hiddenIn(q2, 102);
+  var ul2 = document.createElement('ul');
+  ['GET', 'HEAD', 'PUT', 'DELETE'].forEach(function (o, i) {
+    var li = document.createElement('li');
+    li.setAttribute('qid', '102');
+    var letter = String.fromCharCode(65 + i);
+    var a = document.createElement('a');
+    a.className = 'link';
+    a.href = 'javascript:;';
+    a.innerHTML = '<span class="num_option" data="' + letter + '">' + letter + '、</span><span class="after">' + o + '</span>';
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      hid2.value = toggleData(hid2, letter);
+      if (String(hid2.value).indexOf(letter) >= 0) li.classList.add('check_answer');
+      else li.classList.remove('check_answer');
+    });
+    li.appendChild(a);
+    ul2.appendChild(li);
+  });
+  q2.appendChild(ul2);
+
+  // ---- Q3: div 式,无 input 无隐藏域,class 表达选中 ----
+  var q3 = shell(2, '以下属于 HTTP 请求方法的有（多选）：');
+  ['GET', 'POST', 'FTP', 'PUT'].forEach(function (o, i) {
+    var d = document.createElement('div');
+    var letter = String.fromCharCode(65 + i);
+    d.className = 'answerBg';
+    d.setAttribute('data-v', letter);
+    d.innerHTML = '<span class="num_option">' + letter + '、</span><span class="after">' + o + '</span>';
+    d.addEventListener('click', function () { d.classList.toggle('check_answer'); });
+    q3.appendChild(d);
+  });
+
+  // ---- Q4: 旧式 checkbox,委托在 li 上(toggle) ----
+  var q4 = shell(3, 'HTTP 请求方法中,下面哪些属于：');
+  var hid4 = hiddenIn(q4, 104);
+  var ul4 = document.createElement('ul');
+  ['GET', 'POST', 'FTP', 'PUT'].forEach(function (o, i) {
+    var li = document.createElement('li');
+    li.setAttribute('qid', '104');
+    var letter = String.fromCharCode(65 + i);
+    li.innerHTML = '<span class="num_option" data="' + letter + '">' + letter + '、</span><span class="after">' + o + '</span>';
+    var inp = document.createElement('input');
+    inp.type = 'checkbox';
+    inp.name = 'q3';
+    inp.value = letter;
+    inp.style.display = 'none';
+    li.appendChild(inp);
+    li.addEventListener('click', function () {
+      inp.checked = !inp.checked;
+      hid4.value = toggleData(hid4, letter);
+      li.classList.toggle('check_answer', inp.checked);
+    });
+    ul4.appendChild(li);
+  });
+  q4.appendChild(ul4);
+
+
+  // ---- Q5: 复刻真实反馈结构:li.before-after-checkbox 无 input 无隐藏域,
+  //          原生 addEventListener + isTrusted 检查(合成事件全被忽略)→ 预期诚实失败并回传探针 ----
+  var q5 = shell(4, '大学生安全教育的目的是什么？');
+  var ul5 = document.createElement('ul');
+  ['提高安全意识', '应付检查', '增加学分', '没有目的'].forEach(function (o, i) {
+    var li = document.createElement('li');
+    li.className = 'before-after-checkbox';
+    var letter = String.fromCharCode(65 + i);
+    li.innerHTML = '<div class="before">' + letter + '</div><div class="fl before">' + o + '</div>';
+    li.addEventListener('click', function (e) {
+      if (!e.isTrusted) return;   // 反自动化:合成事件直接忽略
+      Array.prototype.forEach.call(q5.querySelectorAll('li'), function (x) { x.classList.remove('check'); });
+      li.classList.add('check');
+      q5.setAttribute('data-picked', letter);
+    });
+    ul5.appendChild(li);
+  });
+  q5.appendChild(ul5);
+
+  // 平台提交入口
+  window.btnBlueSubmit = function () {
+    window.__submitted = true;
+    window.__submittedAt = Date.now();
+    document.getElementById('bar').textContent = '已提交（模拟）';
+    document.getElementById('bar').style.color = '#16a34a';
+  };
+  window.submitCheckTimes = function () {};
+  window.noSubmit = function () { window.__noSubmit = true; };
+</script>
+</body>
+</html>

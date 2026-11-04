@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>doHomeWorkNew(模拟作业/章节测验)</title>
+<style>
+  body { margin: 0; padding: 10px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #333; background: #fff; }
+  .TiMu { border: 1px solid #e5e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .fontLabel { font-weight: 600; }
+  ul { list-style: none; padding: 0; margin: 8px 0 0; }
+  li { padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
+  li:hover { background: #f3f7ff; }
+  .num_option { color: #8a90a2; margin-right: 4px; }
+  textarea { width: 100%; box-sizing: border-box; height: 56px; border: 1px solid #dfe3ee; border-radius: 6px; padding: 6px; }
+  #bar { margin-top: 8px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h3>第 1 章 · 章节测验（模拟 4 题：单选/判断/多选/填空）</h3>
+<div id="list"></div>
+<div id="bar">未提交</div>
+<script>
+  var QS = [
+    { type: '0', title: '下列哪项是 HTTP 的默认端口？（2.0分）', opts: ['80', '443', '22', '21'] },
+    { type: '3', title: 'HTTPS 默认使用 443 端口。（2.0分）', opts: ['正确', '错误'], judge: true },
+    { type: '1', title: '以下属于 HTTP 请求方法的有：（2.0分）', opts: ['GET', 'POST', 'FTP', 'PUT'] },
+    { type: '2', title: 'HTTP 状态码 200 表示____。（2.0分）', opts: [] }
+  ];
+
+  var list = document.getElementById('list');
+
+  QS.forEach(function (q, qi) {
+    var box = document.createElement('div');
+    box.className = 'TiMu';
+    box.id = 'q' + qi;
+
+    var head = document.createElement('div');
+    head.className = 'clearfix';
+    head.innerHTML = '<span class="fontLabel">' + q.title + '</span>';
+    box.appendChild(head);
+
+    var typeInput = document.createElement('input');
+    typeInput.type = 'hidden';
+    typeInput.name = 'answertype' + qi;
+    typeInput.value = q.type;
+    box.appendChild(typeInput);
+
+    if (q.type === '2') {
+      var ta = document.createElement('textarea');
+      ta.name = 'answer' + qi;
+      box.appendChild(ta);
+    } else {
+      var ul = document.createElement('ul');
+      q.opts.forEach(function (o, oi) {
+        var li = document.createElement('li');
+        var letter = String.fromCharCode(65 + oi);
+        li.innerHTML = '<span class="num_option">' + letter + '、</span><span class="after">' + o + '</span>';
+        var inp = document.createElement('input');
+        inp.type = (q.type === '1') ? 'checkbox' : 'radio';
+        inp.name = 'q' + qi;
+        inp.value = q.judge ? (oi === 0 ? 'true' : 'false') : letter;
+        if (q.type !== '1') inp.style.display = 'none';
+        li.appendChild(inp);
+        ul.appendChild(li);
+      });
+      box.appendChild(ul);
+    }
+    list.appendChild(box);
+  });
+
+  // 选项点击委托（与真实页面一致）
+  document.querySelectorAll('ul li').forEach(function (li) {
+    li.addEventListener('click', function () {
+      var inp = li.querySelector('input');
+      if (!inp) return;
+      if (inp.type === 'radio') inp.checked = true;
+      else if (inp.type === 'checkbox') inp.checked = !inp.checked;
+    });
+  });
+
+  // 平台提交入口
+  window.btnBlueSubmit = function () {
+    window.__submitted = true;
+    window.__submittedAt = Date.now();
+    document.getElementById('bar').textContent = '已提交（模拟）';
+    document.getElementById('bar').style.color = '#16a34a';
+  };
+  window.submitCheckTimes = function () {};
+  window.noSubmit = function () { window.__noSubmit = true; };
+</script>
+</body>
+</html>

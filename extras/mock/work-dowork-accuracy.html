@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dowork · 正确率阈值(模拟)</title>
+<style>
+  body { margin: 0; padding: 12px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #333; background: #fff; }
+  .questionLi { border: 1px solid #e5e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .mark_name { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  .colorShallow { color: #8a90a2; font-weight: 400; }
+  ul { list-style: none; padding: 0; margin: 6px 0 0; }
+  li { padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
+  li:hover { background: #f3f7ff; }
+  .num_option { color: #8a90a2; margin-right: 4px; }
+  #bar { margin-top: 8px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h3>第 4 章 · 章节测验(2 题:1 题可答、1 题 AI 给不出有效答案)</h3>
+<div id="list"></div>
+<div id="bar">未提交</div>
+<script>
+  // 用途:验证「自动提交正确率阈值」是否真的控制交卷。第 2 题题干命中 mock AI 的“故意无解”规则,
+  // 返回的字母匹配不到任何选项 → 该题算失败 → 整卷正确率固定为 50%
+  var list = document.getElementById('list');
+  function shell(id, title) {
+    var box = document.createElement('div');
+    box.className = 'questionLi';
+    box.id = 'q' + id;
+    var name = document.createElement('h3');
+    name.className = 'mark_name';
+    name.innerHTML = '<span class="colorShallow">[单选题]</span>' + title + '（2.0分）';
+    box.appendChild(name);
+    list.appendChild(box);
+    return box;
+  }
+  function choices(box, qid, opts) {
+    var ul = document.createElement('ul');
+    opts.forEach(function (o, i) {
+      var li = document.createElement('li');
+      var letter = String.fromCharCode(65 + i);
+      li.innerHTML = '<span class="num_option">' + letter + '、</span><span class="after">' + o + '</span>';
+      var inp = document.createElement('input');
+      inp.type = 'radio';
+      inp.name = 'q' + qid;
+      inp.value = letter;
+      inp.style.display = 'none';
+      li.appendChild(inp);
+      li.addEventListener('click', function () {
+        Array.prototype.forEach.call(box.querySelectorAll('input'), function (x) { x.checked = false; });
+        inp.checked = true;
+      });
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  }
+  var q1 = shell(0, '下列哪项是 HTTP 的默认端口？');
+  choices(q1, 0, ['80', '443', '22', '21']);
+  var q2 = shell(1, '这道题故意无解，用于验证正确率阈值');
+  choices(q2, 1, ['选项甲', '选项乙', '选项丙', '选项丁']);
+
+  window.btnBlueSubmit = function () {
+    window.__submitted = true;
+    window.__submittedAt = Date.now();
+    document.getElementById('bar').textContent = '已提交（模拟）';
+    document.getElementById('bar').style.color = '#16a34a';
+  };
+  window.submitCheckTimes = function () {};
+  window.noSubmit = function () { window.__noSubmit = true; };
+</script>
+</body>
+</html>

@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>雨课堂 · 模拟视频学习页</title>
+<style>
+  body { margin:0; font:14px/1.6 "Microsoft YaHei",sans-serif; background:#0f1115; color:#e6e6e8; }
+  .wrap { display:flex; min-height:100vh; }
+  .tree { width:250px; padding:12px; background:#171a20; border-right:1px solid #262b33; }
+  .lesson-item { padding:9px 10px; border-radius:6px; cursor:pointer; font-size:13px; color:#b9bcc4; }
+  .lesson-item.active { background:#2b303a; color:#fff; }
+  .lesson-item.done::after { content:" ✓"; color:#8ad48a; }
+  .main { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; padding:20px; }
+  .player { width:600px; height:330px; background:#000; border-radius:8px; position:relative; display:flex; align-items:center; justify-content:center; }
+  video { width:100%; height:100%; background:#0a0a0c; }
+  .bar { display:flex; gap:10px; align-items:center; }
+  button { padding:7px 16px; border-radius:7px; border:1px solid #3a4150; background:#20242c; color:#e6e6e8; cursor:pointer; font-size:13px; }
+  .hint { font-size:12px; color:#767b85; }
+  .popup { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); width:380px; background:#1d222a; border:1px solid #333a45; border-radius:10px; padding:13px 15px; }
+  .popup ul { list-style:none; margin:8px 0 0; padding:0; display:flex; flex-direction:column; gap:6px; }
+  .popup li { padding:6px 9px; border:1px solid #333a45; border-radius:6px; cursor:pointer; font-size:13px; }
+  .popup li.selected { background:#39414f; border-color:#8a93a5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="tree">
+    <div class="lesson-item active" data-i="0">1.1 导论</div>
+    <div class="lesson-item" data-i="1">1.2 方法论</div>
+    <div class="lesson-item" data-i="2">1.3 案例</div>
+  </div>
+  <div class="main">
+    <div class="player"><video playsinline></video></div>
+    <div class="bar"><button id="nextBtn">下一节</button><span class="hint">模拟雨课堂 · 每 3 秒会被"平台"强制暂停一次(测保活)</span></div>
+  </div>
+</div>
+<script>
+(function () {
+  var items = Array.prototype.slice.call(document.querySelectorAll('.lesson-item'));
+  var v = document.querySelector('video');
+  var DUR = 20, t = 0, paused = true, ended = false, muted = false, rate = 1, cur = 0;
+  var pauseCount = 0, popupDone = false, popupShown = false, answered = null;
+
+  Object.defineProperty(v, 'duration', { get: function () { return DUR; } });
+  Object.defineProperty(v, 'currentTime', { get: function () { return t; }, set: function (x) { t = x; } });
+  Object.defineProperty(v, 'paused', { get: function () { return paused; } });
+  Object.defineProperty(v, 'ended', { get: function () { return ended; } });
+  Object.defineProperty(v, 'muted', { get: function () { return muted; }, set: function (x) { muted = !!x; } });
+  Object.defineProperty(v, 'playbackRate', { get: function () { return rate; }, set: function (x) { rate = Number(x) || 1; } });
+  v.play = function () { paused = false; return Promise.resolve(); };
+  v.pause = function () { paused = true; };
+
+  // 模拟平台行为:播放中每 3 秒强制暂停一次(真实环境里失焦就会这样)
+  setInterval(function () {
+    if (!paused && !ended) { paused = true; pauseCount++; }
+  }, 3000);
+
+  setInterval(function () {
+    if (!paused && !ended) {
+      t += 1.5;
+      if (t >= 6 && !popupShown && !popupDone) {
+        popupShown = true; paused = true;
+        var box = document.createElement('div');
+        box.className = 'popup';
+        box.innerHTML = '<div>1+1 等于几？</div><ul><li>A. 1</li><li>B. 2</li><li>C. 3</li><li>D. 4</li></ul><button id="ok">继续学习</button>';
+        document.querySelector('.player').appendChild(box);
+        Array.prototype.forEach.call(box.querySelectorAll('li'), function (li, i) {
+          li.addEventListener('click', function () {
+            Array.prototype.forEach.call(box.querySelectorAll('li'), function (x) { x.classList.remove('selected'); });
+            li.classList.add('selected'); answered = i;
+          });
+        });
+        box.querySelector('#ok').addEventListener('click', function () { box.remove(); popupDone = true; paused = false; });
+      }
+      if (t >= DUR) { ended = true; paused = true; items[cur].classList.add('done'); items[cur].classList.remove('active'); }
+    }
+  }, 250);
+
+  function activate(i) {
+    items.forEach(function (x) { x.classList.remove('active'); });
+    items[i].classList.add('active');
+    cur = i; t = 0; ended = false; paused = true; popupShown = false; popupDone = false;
+    var p = document.querySelector('.popup'); if (p) p.remove();
+  }
+
+  items.forEach(function (el) { el.addEventListener('click', function () { activate(Number(el.dataset.i)); }); });
+  document.getElementById('nextBtn').addEventListener('click', function () {
+    if (cur + 1 < items.length) activate(cur + 1);
+  });
+
+  window.__ykt = {
+    get state() { return { cur: cur, t: t, paused: paused, muted: muted, rate: rate, pauseCount: pauseCount, answered: answered }; }
+  };
+})();
+</script>
+</body>
+</html>

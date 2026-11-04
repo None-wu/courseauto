@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>模拟 AI(富文本输入版)</title>
+<style>
+  body{margin:0;background:#10131b;color:#e6e8ee;font:14px/1.6 system-ui,sans-serif;display:flex;flex-direction:column;height:100vh}
+  #chat{flex:1;overflow-y:auto;padding:16px}
+  .msg{margin:8px 0;padding:10px 14px;border-radius:12px;max-width:80%}
+  .user{background:#1f2733;margin-left:auto}
+  .assistant{background:#1a2130}
+  [data-message-author-role="assistant"]{white-space:pre-wrap}
+  .bar{display:flex;gap:8px;padding:12px;border-top:1px solid #232a38}
+  #editor{flex:1;min-height:64px;background:#161a23;border:1px solid #2a3140;border-radius:10px;padding:10px 12px;outline:none;white-space:pre-wrap}
+  button{background:#2b3648;border:none;color:#e6e8ee;border-radius:10px;padding:0 18px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="chat"></div>
+<div class="bar">
+  <!-- 模拟 Quill:.ql-editor + contenteditable + 监听 paste -->
+  <div id="editor" class="ql-editor" contenteditable="true" role="textbox"></div>
+  <button id="send" aria-label="发送">发送</button>
+</div>
+<script>
+  // 与真实 Quill 一致:拦截 paste 事件,取纯文本插入(多行完整接收)
+  const editor = document.getElementById('editor');
+  editor.addEventListener('paste', function (e) {
+    e.preventDefault();
+    const text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    if (!text) return;
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    sel.getRangeAt(0).deleteContents();
+    const node = document.createTextNode(text);
+    sel.getRangeAt(0).insertNode(node);
+    sel.collapseToEnd();
+  });
+  function sendNow() {
+    const text = editor.innerText.trim();
+    if (!text) return;
+    editor.innerText = '';
+    const chat = document.getElementById('chat');
+    chat.insertAdjacentHTML('beforeend',
+      '<div class="msg user">' + text.replace(/[&<>]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</div>');
+    // 模拟 AI:校验题目完整性 —— 只收到格式要求没有题干时如实说"没收到"
+    const ok = text.indexOf('题目:') >= 0 && text.indexOf('选项:') >= 0;
+    const reply = ok
+      ? '收到 ' + text.length + ' 个字符,题目完整。\nB'
+      : '还没收到题目 —— 这条消息里只有格式要求,没有题干、选项(仅 ' + text.length + ' 字符)。';
+    setTimeout(function () {
+      chat.insertAdjacentHTML('beforeend',
+        '<div class="msg assistant" data-message-author-role="assistant">' + reply.replace(/[&<>]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])) + '</div>');
+      chat.scrollTop = chat.scrollHeight;
+    }, 600);
+  }
+  document.getElementById('send').addEventListener('click', sendNow);
+</script>
+</body>
+</html>

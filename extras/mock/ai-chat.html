@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>模拟网页版 AI 对话</title>
+<style>
+  body { margin: 0; font: 14px/1.7 "Microsoft YaHei", sans-serif; background: #0f1115; color: #e6e8ee; }
+  header { padding: 10px 14px; border-bottom: 1px solid #232733; color: #9aa3b5; font-size: 12px; }
+  #msgs { padding: 14px; height: 480px; overflow-y: auto; }
+  .msg { max-width: 84%; padding: 9px 12px; border-radius: 10px; margin-bottom: 10px; white-space: pre-wrap; }
+  .msg.me { margin-left: auto; background: #1d4ed8; color: #fff; }
+  .msg.ai { background: #1a1f2b; border: 1px solid #262c3a; }
+  .composer { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid #232733; }
+  textarea { flex: 1; height: 74px; resize: none; background: #161a23; color: #e6e8ee;
+             border: 1px solid #2a3040; border-radius: 8px; padding: 8px 10px; font: inherit; }
+  button { align-self: flex-end; height: 34px; padding: 0 18px; border: 0; border-radius: 8px;
+           background: #2563eb; color: #fff; cursor: pointer; font: inherit; }
+  button:hover { background: #1d4ed8; }
+</style>
+</head>
+<body>
+<header>模拟网页版 AI(结构:输入框 + 发送按钮 + 回复气泡),真实站点由「学习通网页AI桥」适配</header>
+<div id="msgs"></div>
+<div class="composer">
+  <textarea id="ask" placeholder="在这里输入问题…"></textarea>
+  <button id="send" type="button">发送</button>
+</div>
+<script>
+  var msgs = document.getElementById('msgs');
+  var ask = document.getElementById('ask');
+
+  function bubble(cls, text) {
+    var d = document.createElement('div');
+    d.className = cls;
+    d.textContent = text;
+    msgs.appendChild(d);
+    msgs.scrollTop = msgs.scrollHeight;
+    return d;
+  }
+
+  document.getElementById('send').addEventListener('click', async function () {
+    var text = (ask.value || '').trim();
+    if (!text) return;
+    bubble('msg me', text);
+    ask.value = '';
+
+    try {
+      var res = await fetch('/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: text }] })
+      });
+      var obj = await res.json();
+      var answer = (obj.choices && obj.choices[0] && obj.choices[0].message.content) || '(空)';
+      // 类名带 markdown-body:桥脚本用通用选择器即可命中
+      bubble('msg ai markdown-body', answer);
+    } catch (e) {
+      bubble('msg ai markdown-body', '请求失败:' + e.message);
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>慢速整卷 AI(模拟真实流式输出)</title>
+<style>
+  body{margin:0;background:#17171c;color:#e8e8ee;font:14px/1.6 system-ui,"Microsoft YaHei",sans-serif}
+  .wrap{display:flex;flex-direction:column;height:100vh}
+  .chat{flex:1;overflow:auto;padding:16px}
+  .msg{max-width:80%;padding:10px 12px;border-radius:10px;margin:8px 0;white-space:pre-wrap;word-break:break-word}
+  .user{background:#2e6bd6;margin-left:auto}
+  .ai{background:#26262e}
+  .bar{display:flex;gap:6px;margin-top:6px}
+  .bar button{width:26px;height:26px;border-radius:6px;border:0;background:#33333d;color:#bbb;cursor:pointer}
+  .composer{display:flex;gap:8px;padding:10px;border-top:1px solid #2c2c36}
+  textarea{flex:1;min-height:44px;background:#1d1d22;color:#eee;border:0;border-radius:8px;padding:10px;outline:none;resize:none}
+  #send{width:64px;border:0;border-radius:8px;background:#2e6bd6;color:#fff;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="chat" id="chat"></div>
+  <div class="composer">
+    <textarea id="input" placeholder="Message..."></textarea>
+    <button id="send">发送</button>
+  </div>
+</div>
+<script>
+  var chat = document.getElementById('chat');
+  var input = document.getElementById('input');
+  function esc(s){ return String(s).replace(/[&<>]/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]; }); }
+  function addToolbar(box){
+    var bar = document.createElement('div');
+    bar.className = 'bar';
+    ['⧉','👍','👎','🔊','↻'].forEach(function(t){
+      var b = document.createElement('button'); b.textContent = t; bar.appendChild(b);
+    });
+    box.appendChild(bar);
+  }
+  document.getElementById('send').onclick = function(){
+    var q = input.value;
+    if (!q.trim()) return;
+    input.value = '';
+    var u = document.createElement('div');
+    u.className = 'msg user'; u.textContent = q;   // 真实站点会把整条提问原样显示出来
+    chat.appendChild(u);
+    var box = document.createElement('div');
+    box.className = 'msg ai';
+    chat.appendChild(box);
+    // 从整卷 prompt 里数题目条数(形如 "1. (单选题) ...")
+    var n = (q.match(/^\d+\.\s*\(/gm) || []).length || 30;
+    var i = 0;
+    var txt = '';
+    function next(){
+      if (i >= n) { addToolbar(box); return; }
+      i++;
+      txt += i + '.' + (i % 3 === 0 ? '正确' : (i % 2 ? 'A' : 'B')) + '\n';
+      box.textContent = txt;
+      chat.scrollTop = chat.scrollHeight;
+      // 第 12 题后长时间停顿:模拟 AI 思考/网络卡顿,旧版桥会在这里提前收货
+      var wait = (i === 12) ? 12000 : 600;
+      setTimeout(next, wait);
+    }
+    setTimeout(next, 800);
+  };
+</script>
+</body>
+</html>

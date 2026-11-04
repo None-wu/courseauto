@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>视频任务(模拟 /ananas/modules/video)</title>
+<style>
+  body { margin: 0; padding: 8px; font: 13px/1.6 "Microsoft YaHei", sans-serif; background: #101218; color: #d6d9e0; }
+  #video_html5_api { width: 100%; height: 90px; background: #1c2030; border-radius: 6px; }
+  .popup { position: fixed; left: 24px; top: 24px; right: 24px; background: #fff; color: #333;
+           border-radius: 8px; padding: 12px; box-shadow: 0 6px 24px rgba(0,0,0,.35); }
+  .popup ul { list-style: none; padding: 0; margin: 8px 0; }
+  .popup li { padding: 4px 6px; border: 1px solid #e3e6ef; border-radius: 6px; margin-bottom: 4px; cursor: pointer; }
+  .popup li:hover { background: #f2f6ff; }
+  .num_option { color: #8a90a2; margin-right: 4px; }
+  .popup button { padding: 5px 12px; border-radius: 6px; border: 1px solid #2f6fed; background: #2f6fed; color: #fff; cursor: pointer; }
+  #hud { color: #6b7280; font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div id="video_html5_api"></div>
+<div id="hud">模拟播放器：0.0 / 6.0s</div>
+<script>
+  // ===== 伪 video.js 播放器：用定时器模拟进度，便于无头环境快速跑完 =====
+  var taux = 0, rate = 1, paused = true, ended = false, dur = 6, endedCb = null, quizShown = false;
+  var el = document.getElementById('video_html5_api');
+  var hud = document.getElementById('hud');
+  var popup = null;
+
+  var player = {
+    muted: function () {},
+    playbackRate: function (r) { if (r) rate = r; return rate; },
+    play: function () { paused = false; },
+    pause: function () { paused = true; },
+    paused: function () { return paused; },
+    duration: function () { return dur; },
+    on: function (ev, cb) { if (ev === 'ended') endedCb = cb; }
+  };
+  window.videojs = function () { return player; };
+  window.isUnFinishJob = function () { return !ended; };
+
+  function tick() {
+    if (!paused && !ended) {
+      taux += 0.1 * rate;
+      if (taux >= dur) {
+        ended = true; paused = true; taux = dur;
+        if (endedCb) endedCb();
+      }
+      if (!quizShown && taux >= 1.2) { quizShown = true; showQuiz(); }
+    }
+    hud.textContent = '模拟播放器：' + taux.toFixed(1) + ' / ' + dur.toFixed(1) + 's' +
+      (paused ? '（暂停）' : '（播放中 ' + rate + 'x）');
+  }
+  setInterval(tick, 100);
+
+  // 选项点击委托（真实学习通页面也是委托处理）
+  function bindOptionClicks(root) {
+    root.querySelectorAll('ul li').forEach(function (li) {
+      li.addEventListener('click', function () {
+        var inp = li.querySelector('input');
+        if (inp && !inp.checked) { inp.checked = true; }
+      });
+    });
+  }
+
+  function showQuiz() {
+    paused = true;
+    popup = document.createElement('div');
+    popup.className = 'TiMu popup';
+    popup.innerHTML =
+      '<div class="clearfix"><span class="fontLabel">视频弹题：1+1 等于几？（2.0分）</span></div>' +
+      '<input type="hidden" name="answertype1" value="0">' +
+      '<ul>' +
+        '<li><span class="num_option">A、</span><span class="after">1</span><input type="radio" name="q1" value="A"></li>' +
+        '<li><span class="num_option">B、</span><span class="after">2</span><input type="radio" name="q1" value="B"></li>' +
+        '<li><span class="num_option">C、</span><span class="after">3</span><input type="radio" name="q1" value="C"></li>' +
+        '<li><span class="num_option">D、</span><span class="after">4</span><input type="radio" name="q1" value="D"></li>' +
+      '</ul>' +
+      '<button type="button">继续学习</button>';
+    document.body.appendChild(popup);
+    bindOptionClicks(popup);
+    popup.querySelector('button').addEventListener('click', function () {
+      window.__quizAnswered = true;
+      popup.remove();
+      popup = null;
+      paused = false;   // 脚本随后也会调 player.play()
+    });
+  }
+</script>
+</body>
+</html>

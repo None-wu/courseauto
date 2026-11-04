@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dowork · 新版 newTiMu 结构(模拟真实探针)</title>
+<style>
+  body { margin: 0; padding: 12px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #333; background: #fff; }
+  .TiMu { border: 1px solid #e5e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .Zy_TItle { display: flex; gap: 6px; margin-bottom: 8px; }
+  .Zy_TItle > i { font-style: normal; color: #8a90a2; }
+  .fontLabel { font-weight: 600; }
+  .newZy_TItle { color: #d4380d; font-weight: 400; }
+  ul { list-style: none; padding: 0; margin: 6px 0 0; }
+  li { display: flex; gap: 6px; padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
+  li:hover { background: #f3f7ff; }
+  .num_option_dx, .num_option { color: #8a90a2; }
+  .num_option_dx.check_answer, .num_option.check_answer { color: #2e6bd6; font-weight: 700; }
+  #bar { margin-top: 8px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h3>第 5 章 · 章节测验(新版 newTiMu:li.onclick=addMultipleChoice/addChoice + answer&lt;qid&gt; 隐藏域,无 input)</h3>
+<div id="list"></div>
+<div id="bar">未提交</div>
+<script>
+  // 复刻用户真实页面(21:23 探针):
+  //   <li class="before-after-checkbox" onclick="addMultipleChoice(this);" qid="..." qtype="1" role="checkbox">
+  //     <label class="fl before"><span class="num_option_dx" data="A">A</span></label><a>选项文字</a>
+  //   </li>  +  <input type="hidden" id="answer<qid>"> / answertype<qid>
+  // 页面处理函数只挂在 window 上(真实页面就是 iframe 的 window),没有 input、没有 jQuery 绑定
+  var list = document.getElementById('list');
+  var seq = 100;
+
+  function makeQuestion(title, type, opts) {
+    seq++;
+    var qid = String(seq);
+    var box = document.createElement('div');
+    box.className = 'TiMu newTiMu';
+    box.setAttribute('data', type);
+    box.id = 'q' + qid;
+    var tag = type === '1' ? '【多选题】' : type === '3' ? '【判断题】' : '【单选题】';
+    var head = document.createElement('div');
+    head.className = 'Zy_TItle clearfix';
+    head.innerHTML = '<i class="fl">' + (seq - 100) + '</i><div class="fontLabel"><span class="newZy_TItle">' + tag +
+      '</span>【选择题】<br>' + title + '</div>';
+    box.appendChild(head);
+
+    var wrap = document.createElement('div');
+    wrap.className = 'clearfix';
+    var ul = document.createElement('ul');
+    ul.className = 'Zy_ulTop w-top fl';
+    opts.forEach(function (pair, i) {
+      var letter = String.fromCharCode(65 + i);
+      var li = document.createElement('li');
+      li.className = 'before-after-checkbox';
+      li.setAttribute('tabindex', '0');
+      li.setAttribute('role', type === '1' ? 'checkbox' : 'radio');
+      li.setAttribute('onclick', (type === '1' ? 'addMultipleChoice' : 'addChoice') + '(this);');
+      li.setAttribute('qid', qid);
+      li.setAttribute('qtype', type);
+      li.setAttribute('aria-label', letter + ' ' + pair[1] + '选择');
+      li.innerHTML = '<label class="fl before"><span class="num_option_dx choice' + qid + '" tabindex="-1" name="answer' + qid +
+        '" data="' + pair[0] + '">' + letter + '</span></label>' +
+        '<a tabindex="-1" href="javascript:;">' + pair[1] + '</a>';
+      ul.appendChild(li);
+    });
+    wrap.appendChild(ul);
+    box.appendChild(wrap);
+
+    var h1 = document.createElement('input');
+    h1.type = 'hidden'; h1.id = 'answer' + qid; h1.name = 'answer' + qid; h1.value = '';
+    box.appendChild(h1);
+    var h2 = document.createElement('input');
+    h2.type = 'hidden'; h2.id = 'answertype' + qid; h2.name = 'answertype' + qid; h2.value = type;
+    box.appendChild(h2);
+
+    list.appendChild(box);
+    return box;
+  }
+
+  // 多选:点一次选中、再点一次取消(真实 addMultipleChoice 语义)
+  window.addMultipleChoice = function (li) {
+    var qid = li.getAttribute('qid');
+    var hid = document.getElementById('answer' + qid);
+    var span = li.querySelector('.num_option_dx');
+    var v = span.getAttribute('data');
+    var cur = String(hid.value || '');
+    var i = cur.indexOf(v);
+    if (i >= 0) {
+      hid.value = cur.slice(0, i) + cur.slice(i + 1);
+      span.classList.remove('check_answer');
+      li.removeAttribute('aria-checked');
+    } else {
+      hid.value = cur + v;
+      span.classList.add('check_answer');
+      li.setAttribute('aria-checked', 'true');
+    }
+  };
+  // 单选/判断:清同题其它、写当前
+  window.addChoice = function (li) {
+    var qid = li.getAttribute('qid');
+    var hid = document.getElementById('answer' + qid);
+    var span = li.querySelector('.num_option_dx');
+    var box = li.closest('.TiMu');
+    Array.prototype.forEach.call(box.querySelectorAll('li'), function (x) {
+      x.removeAttribute('aria-checked');
+      var sp = x.querySelector('.num_option_dx');
+      if (sp) sp.classList.remove('check_answer');
+    });
+    span.classList.add('check_answer');
+    li.setAttribute('aria-checked', 'true');
+    hid.value = span.getAttribute('data');
+  };
+
+  makeQuestion('以下属于 HTTP 请求方法的有( )(多选)', '1', [['A', 'GET'], ['B', 'POST'], ['C', 'FTP'], ['D', 'PUT']]);
+  makeQuestion('下列 HTTP 常见方法包括( )(多选)', '1', [['A', 'GET'], ['B', 'HEAD'], ['C', 'PUT'], ['D', 'DELETE']]);
+  makeQuestion('HTTPS 默认使用 443 端口。', '3', [['true', '对'], ['false', '错']]);
+  makeQuestion('地球是平的。', '3', [['true', '对'], ['false', '错']]);
+
+  window.btnBlueSubmit = function () {
+    window.__submitted = true;
+    document.getElementById('bar').textContent = '已提交（模拟）';
+  };
+  window.submitCheckTimes = function () {};
+  window.noSubmit = function () { window.__noSubmit = true; };
+</script>
+</body>
+</html>
