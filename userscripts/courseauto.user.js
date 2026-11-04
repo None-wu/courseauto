@@ -5,10 +5,10 @@
 // @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
 // @author       courseauto contributors
 // @license      MIT
-// @homepageURL  https://github.com/DaRin1403/courseauto
-// @supportURL   https://github.com/DaRin1403/courseauto/issues
-// @updateURL    https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto.user.js
+// @homepageURL  https://github.com/None-wu/courseauto
+// @supportURL   https://github.com/None-wu/courseauto/issues
+// @updateURL    https://cdn.jsdelivr.net/gh/None-wu/courseauto@main/userscripts/courseauto.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/None-wu/courseauto@main/userscripts/courseauto.user.js
 // @match        *://*.chaoxing.com/*
 // @match        *://*.zhihuishu.com/*
 // @match        *://*.yuketang.cn/*
@@ -1418,7 +1418,7 @@
       try {
         if (PAUSED || running) return; // 有任务进行中不打断
         const myV = (typeof GM_info !== 'undefined' && GM_info.script) ? GM_info.script.version : '0';
-        const text = await cxFetch('https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/version.json', { timeout: 10000 });
+        const text = await cxFetch('https://cdn.jsdelivr.net/gh/None-wu/courseauto@main/version.json', { timeout: 10000 });
         // 有些编辑器会在 UTF-8 文件头写 BOM,JSON.parse 会直接抛错 → 先剥掉再解析
         const obj = JSON.parse(String(text || '').replace(/^\uFEFF/, '').trim());
         const remoteV = String(obj.v || '');

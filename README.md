@@ -2,11 +2,15 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Userscript](https://img.shields.io/badge/userscript-Tampermonkey-blue.svg)](userscripts/courseauto.user.js)
-[![CI](https://github.com/DaRin1403/courseauto/actions/workflows/ci.yml/badge.svg)](https://github.com/DaRin1403/courseauto/actions/workflows/ci.yml)
+[![CI](https://github.com/None-wu/courseauto/actions/workflows/ci.yml/badge.svg)](https://github.com/None-wu/courseauto/actions/workflows/ci.yml)
 
 > 一个油猴(Tampermonkey)脚本,自动完成网课课程任务点。
 > **v1.3.0 起支持三个平台**:学习通(超星)、智慧树(知到)、雨课堂。
 > **零基础可用**:不用写一行代码,装两个东西,填一个 Key,打开课程页就自动干活。
+
+> **来源**:本项目基于 [DaRin1403/xuexitong-autostudy](https://github.com/DaRin1403/xuexitong-autostudy)(MIT)二次开发,
+> 沿用其 MIT 许可与原始版权声明;`.git` 历史中保留了原作者的全部提交记录。在此基础上重构了内核/适配器分层、
+> 补齐了网页 AI 免 Key 答题、判断题与新版页面结构适配、本机安装向导与客户版打包。
 
 ---
 
@@ -113,7 +117,7 @@ npm run setup
 
 装好油猴后，点这个链接，油猴会弹出安装页：
 
-👉 **[点此一键安装](https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto.user.js)**
+👉 **[点此一键安装](https://cdn.jsdelivr.net/gh/None-wu/courseauto@main/userscripts/courseauto.user.js)**
 
 > 首次推送后 CDN 需几分钟同步；打不开就稍等重试。
 
@@ -278,7 +282,7 @@ A: **不建议,风险极高。** 本脚本不包含考试页功能,也请不要�
 ## 🛠 开发与构建
 
 ```bash
-git clone https://github.com/DaRin1403/courseauto.git
+git clone https://github.com/None-wu/courseauto.git
 cd courseauto
 
 npm run build       # src/ → userscripts/*.user.js,同时同步 version.json 与 package.json 版本号
@@ -307,6 +311,7 @@ npm run test:all    # 10 个套件:学习通主流程/网页AI/测验/新版结�
 
 本项目在开发过程中参考了以下开源项目的思路与接口约定:
 
+- **[DaRin1403/xuexitong-autostudy](https://github.com/DaRin1403/xuexitong-autostudy)** — 上游项目,本仓库在其代码基础上二次开发(MIT)
 - [ocsjs(OCS 网课助手)](https://greasyfork.org/cs/scripts/457151)
 - [chaoxing-toolkit](https://github.com/pang-qin/chaoxing-toolkit)
 - [fuckCourse](https://github.com/sheshuyu/fuckCourse) / [Samueli924/chaoxing](https://github.com/Samueli924/chaoxing)

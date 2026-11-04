@@ -5,9 +5,9 @@
 // @description  配合「刷课助手」使用:接收题目 → 自动填入网页版 AI 输入框 → 发送 → 抓取回答 → 回传。免 API Key。
 // @author       courseauto contributors
 // @license      MIT
-// @homepageURL  https://github.com/DaRin1403/courseauto
-// @updateURL    https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto-webai-bridge.user.js
-// @downloadURL  https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/userscripts/courseauto-webai-bridge.user.js
+// @homepageURL  https://github.com/None-wu/courseauto
+// @updateURL    https://cdn.jsdelivr.net/gh/None-wu/courseauto@main/userscripts/courseauto-webai-bridge.user.js
+// @downloadURL  https://cdn.jsdelivr.net/gh/None-wu/courseauto@main/userscripts/courseauto-webai-bridge.user.js
 // @match        *://chat.deepseek.com/*
 // @match        *://chatgpt.com/*
 // @match        *://chat.openai.com/*

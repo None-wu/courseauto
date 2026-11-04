@@ -22,7 +22,7 @@
       try {
         if (PAUSED || running) return; // 有任务进行中不打断
         const myV = (typeof GM_info !== 'undefined' && GM_info.script) ? GM_info.script.version : '0';
-        const text = await cxFetch('https://cdn.jsdelivr.net/gh/DaRin1403/courseauto@main/version.json', { timeout: 10000 });
+        const text = await cxFetch('https://cdn.jsdelivr.net/gh/None-wu/courseauto@main/version.json', { timeout: 10000 });
         // 有些编辑器会在 UTF-8 文件头写 BOM,JSON.parse 会直接抛错 → 先剥掉再解析
         const obj = JSON.parse(String(text || '').replace(/^\uFEFF/, '').trim());
         const remoteV = String(obj.v || '');
