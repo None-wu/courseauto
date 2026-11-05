@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>DeepSeek 新输入条(受控组件 mock)</title>
+<style>
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f7f8fa; color: #1f2329; }
+  #chat { max-width: 760px; margin: 0 auto; padding: 24px 16px 220px; }
+  .msg { margin: 14px 0; display: flex; }
+  .msg.user { justify-content: flex-end; }
+  .bubble { max-width: 78%; padding: 10px 14px; border-radius: 12px; line-height: 1.55; white-space: pre-wrap; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .msg.user .bubble { background: #dbeafe; }
+  .ds-markdown { font-size: 15px; }
+
+  /* 输入条:复刻 DeepSeek 新版结构 */
+  .composer-wrap { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px; background: linear-gradient(#f7f8fa00, #f7f8fa 40%); }
+  .composer { max-width: 760px; margin: 0 auto; background: #fff; border: 1px solid #e5e6eb; border-radius: 18px; padding: 10px 12px 8px; box-shadow: 0 4px 16px rgba(0,0,0,.06); }
+  textarea._27c9245 { width: 100%; border: 0; outline: none; resize: none; font-size: 15px; line-height: 1.45; height: 54px; background: transparent; }
+  .bar { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+  .ds-toggle-button { width: 34px; height: 34px; border-radius: 999px; display: flex; align-items: center; justify-content: center; background: #f2f3f5; }
+  .ds-toggle-button--selected { background: #e8f0ff; }
+  .grow { flex: 1; }
+  .ds-button { width: 34px; height: 34px; border-radius: 999px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+  .ds-button--primary.ds-button--filled { background: #4d6bfe; }
+  .ds-button--disabled { background: #e5e6eb !important; cursor: not-allowed; }
+  svg { width: 18px; height: 18px; display: block; }
+  .state { max-width: 760px; margin: 8px auto 0; font-size: 12px; color: #86909c; }
+</style>
+</head>
+<body>
+<div id="chat">
+  <div class="msg user"><div class="bubble">你好,这是新会话</div></div>
+  <div class="msg"><div class="bubble ds-markdown">你好!有什么可以帮你?</div></div>
+</div>
+
+<div class="composer-wrap">
+  <div class="composer">
+    <textarea class="_27c9245 ds-scroll-area ds-scroll-area--show-on-focus-within ds-scroll-area--enabled" rows="2" placeholder="给 DeepSeek 发送消息"></textarea>
+    <div class="bar">
+      <div class="ds-toggle-button ds-toggle-button--m ds-toggle-button--selected" title="">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="#4d6bfe" stroke-width="2"/></svg>
+      </div>
+      <div class="ds-toggle-button ds-toggle-button--m ds-toggle-button--selected" title="">
+        <svg viewBox="0 0 24 24"><path d="M4 12h16M12 4v16" stroke="#4d6bfe" stroke-width="2"/></svg>
+      </div>
+      <div class="grow"></div>
+      <div class="ds-button ds-button--primary ds-button--filled ds-button--circle ds-button--disabled" aria-disabled="true" role="button">
+        <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>
+      </div>
+    </div>
+  </div>
+  <div class="state" id="state">state: 空(发送键置灰)</div>
+</div>
+
+<script>
+/* 复刻受控组件的行为:
+   1) 值存在"框架 state"里,只有**可信**的 input 事件才会更新它
+      —— 直接用 value setter + dispatchEvent(new Event('input')) 是 untrusted,state 不变,
+         发送键一直置灰、回车也发不出去(正是线上 DeepSeek 的故障现象)
+   2) execCommand('insertText') 走浏览器编辑管线,事件可信 → state 更新 → 发送键变可用
+   3) 回车:只认可信 keydown(模拟真实站点忽略合成按键) */
+(function () {
+  const ta = document.querySelector('textarea');
+  const send = document.querySelector('.ds-button--circle');
+  const chat = document.getElementById('chat');
+  const stateEl = document.getElementById('state');
+  let state = '';            // 框架 state
+  let generating = false;
+
+  const paint = () => {
+    const has = !!state.trim();
+    send.setAttribute('aria-disabled', has && !generating ? 'false' : 'true');
+    send.classList.toggle('ds-button--disabled', !(has && !generating));
+    stateEl.textContent = 'state: ' + (has ? JSON.stringify(state.slice(0, 30)) : '空(发送键置灰)') + (generating ? ' | 生成中' : '');
+  };
+
+  // 只有可信 input 才更新 state
+  ta.addEventListener('input', (e) => {
+    if (e.isTrusted) { state = ta.value; paint(); }
+  });
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey && e.isTrusted) { e.preventDefault(); doSend(); }
+  });
+
+  function doSend() {
+    if (!state.trim() || generating) return;
+    const q = state;
+    state = '';
+    ta.value = '';
+    paint();
+    const u = document.createElement('div');
+    u.className = 'msg user';
+    u.innerHTML = '<div class="bubble"></div>';
+    u.querySelector('.bubble').textContent = q;
+    chat.appendChild(u);
+    generating = true;
+    paint();
+    // 生成中:出现"停止生成"按钮(桥靠它判断 isGenerating)
+    const stop = document.createElement('button');
+    stop.setAttribute('aria-label', '停止生成');
+    stop.textContent = '■';
+    stop.style.cssText = 'position:fixed;left:-9999px';
+    document.body.appendChild(stop);
+    setTimeout(() => {
+      const a = document.createElement('div');
+      a.className = 'msg';
+      a.innerHTML = '<div class="bubble ds-markdown"></div>';
+      a.querySelector('.bubble').textContent = 'B';
+      chat.appendChild(a);
+      stop.remove();
+      generating = false;
+      paint();
+      window.__dsSent = true;
+    }, 700);
+  }
+
+  send.addEventListener('click', () => {
+    if (send.getAttribute('aria-disabled') === 'true') { window.__dsClickIgnored = (window.__dsClickIgnored || 0) + 1; return; }
+    doSend();
+  });
+  paint();
+})();
+</script>
+</body>
+</html>

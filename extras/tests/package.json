@@ -10,14 +10,16 @@
     "test:zhs": "node run-zhs.mjs",
     "test:ykt": "node run-ykt.mjs",
     "test:quiz": "node run-quiz.mjs",
-    "test:all": "node run.mjs && node run.mjs --webai && node run-quiz.mjs && node check-newver.mjs && node check-judge.mjs && node check-multi.mjs && node check-settings.mjs && node check-accuracy.mjs && node check-pause.mjs && node run-zhs.mjs && node run-ykt.mjs",
+    "test:all": "node run.mjs && node run.mjs --webai && node run-quiz.mjs && node check-newver.mjs && node check-judge.mjs && node check-multi.mjs && node check-settings.mjs && node check-accuracy.mjs && node check-pause.mjs && node run-zhs.mjs && node run-ykt.mjs && node check-relay.mjs && node check-ds-composer.mjs",
     "test:headed": "node run.mjs --headed",
     "test:judge": "node check-judge.mjs",
     "test:multi": "node check-multi.mjs",
     "test:settings": "node check-settings.mjs",
     "test:accuracy": "node check-accuracy.mjs",
     "test:newver": "node check-newver.mjs",
-    "test:pause": "node check-pause.mjs"
+    "test:pause": "node check-pause.mjs",
+    "test:relay": "node check-relay.mjs",
+    "test:ds": "node check-ds-composer.mjs"
   },
   "dependencies": {
     "playwright-core": "^1.64.1"

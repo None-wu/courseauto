@@ -41,6 +41,7 @@ const PAGES_MAP = {
   '/ai-diff': 'ai-diff.html',
   '/ai-slow': 'ai-slow.html',
   '/ai-sym': 'ai-sym.html',
+  '/ai-ds': 'ai-ds.html',   // DeepSeek 新输入条:受控 textarea + 图标圆钮 + 置灰态
   '/zhihuishu/videoStudy.html': 'zhihuishu.html',
   '/yuketang/course.html': 'yuketang.html'
 };

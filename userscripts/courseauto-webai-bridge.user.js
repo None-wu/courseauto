@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         刷课助手 · 网页AI桥
 // @namespace    cx-auto-study
-// @version      1.3.0
+// @version      1.3.1
 // @description  配合「刷课助手」使用:接收题目 → 自动填入网页版 AI 输入框 → 发送 → 抓取回答 → 回传。免 API Key。
 // @author       courseauto contributors
 // @license      MIT
@@ -180,13 +180,25 @@
   // 输入条里的"疑似发送控件"候选(DeepSeek 等站的发送按钮是纯图标,类名是哈希值,
   // 没有任何 send/发送 字样可循)。策略:输入的父容器链里找含 svg 的小尺寸可点击元素,
   // 排除附件/语音/搜索类,取最靠右的(发送键通常在输入条右端);配合发送校验逐个试
+  // 控件是否不可点(禁用态):框架在输入框为空时常把发送键置灰,
+  // 点它等于没点 —— 必须先跳过,否则"已试候选=1个"却毫无效果
+  function isDisabledEl(el) {
+    if (!el) return true;
+    if (el.disabled === true) return true;
+    if (String(el.getAttribute('aria-disabled') || '') === 'true') return true;
+    return /(^|[\s_-])disabled([\s_-]|$)/i.test(String(el.className || ''));
+  }
+
   function sendCandidates(input) {
     const SKIP = /(附件|上传|文件|语音|麦克风|拍照|图片|摄像|attach|upload|file|mic|voice|image|photo|camera|插件|联网|搜索|search|深度思考|思考)/i;
     const out = [];
     const seen = new Set();
-    const push = (el) => { if (el && !seen.has(el) && visible(el)) { seen.add(el); out.push(el); } };
+    const push = (el) => { if (el && !seen.has(el) && visible(el) && !isDisabledEl(el)) { seen.add(el); out.push(el); } };
     const btn = findSendButton(input);
     if (btn) push(btn);
+    // 权重高的排前面:primary/filled/circle/send 这类类名基本就是主操作键(发送键都是主色圆钮);
+    // DeepSeek 新输入条没有 aria/title,只能靠类名 + 位置(最靠右)两个信号
+    const hint = (el) => /(primary|filled|circle|send|submit)/i.test(String(el.className || '')) ? 1 : 0;
     let p = input;
     for (let i = 0; i < 5 && p; i++) {
       p = p.parentElement;
@@ -197,27 +209,53 @@
         if (r.width < 20 || r.width > 90 || r.height < 20 || r.height > 90) return false;
         const label = (el.getAttribute('aria-label') || '') + ' ' + (el.getAttribute('title') || '');
         if (SKIP.test(label) || SKIP.test(String(el.className || ''))) return false;
+        if (isDisabledEl(el)) return false;   // 置灰的发送键点了没用
         return !!el.querySelector('svg') || el.tagName === 'BUTTON';
       });
       if (cands.length) {
-        cands.sort((a, b) => b.getBoundingClientRect().right - a.getBoundingClientRect().right);
-        push(cands[0]);
+        cands.sort((a, b) => hint(b) - hint(a) || b.getBoundingClientRect().right - a.getBoundingClientRect().right);
+        cands.slice(0, 3).forEach(push);   // 一个不准就试下一个
         break;   // 只取最近一层容器,越往上越容易误伤
       }
     }
     return out;
   }
 
+  // 受控组件(值存在框架自己的 state 里)只改 DOM 的 value 不会更新框架状态:
+  // 发送键一直 disabled、回车也被忽略 —— 表现是"题目填进去了却发不出去"
+  // (DeepSeek 新输入条正是这种:textarea + 圆形图标发送键,aria/title 全空)。
+  // execCommand('insertText') 走浏览器编辑管线,事件是可信的,框架能收到并更新状态。
+  function fillByExecCommand(input, text) {
+    try {
+      input.focus();
+      if (typeof input.select === 'function') input.select();
+      else {
+        const range = document.createRange();
+        range.selectNodeContents(input);
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+      }
+      return document.execCommand('insertText', false, text);
+    } catch (e) { return false; }
+  }
+
   function fillInput(input, text) {
     input.focus();
     const tag = (input.tagName || '').toLowerCase();
     if (tag === 'textarea' || tag === 'input') {
-      const proto = tag === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
-      const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
-      setter.call(input, text);
-      input.dispatchEvent(new Event('input', { bubbles: true }));
+      // ① 优先走编辑管线(受控组件唯一可靠的路);② 失败再退原生 setter(非受控/execCommand 被禁)
+      const viaCmd = fillByExecCommand(input, text) && !!String(input.value || '').trim();
+      if (!viaCmd) {
+        const proto = tag === 'textarea' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+        const setter = Object.getOwnPropertyDescriptor(proto, 'value').set;
+        setter.call(input, text);
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
       input.dispatchEvent(new Event('change', { bubbles: true }));
-      return true;
+      // 个别框架只监听 beforeinput:补一发(不能取消,只是通知)
+      try { input.dispatchEvent(new InputEvent('beforeinput', { bubbles: true, cancelable: false, data: text, inputType: 'insertText' })); } catch (e) { /* ignore */ }
+      return !!String(input.value || '').trim();
     }
     // 富文本编辑器(Quill/ProseMirror/元宝等):
     // 先全选清空,再模拟「粘贴」事件 —— 编辑器对 paste 的多行支持最稳,
@@ -303,7 +341,7 @@
               if (r.width < 15 || r.width > 100 || r.height < 15 || r.height > 100) continue;
               if (!el.querySelector('svg') && el.tagName !== 'BUTTON' && el.getAttribute('role') !== 'button') continue;
               seen.add(el);
-              out.push({ tag: el.tagName, cls: String(el.className || '').slice(0, 80), aria: el.getAttribute('aria-label') || '', title: el.getAttribute('title') || '', svg: !!el.querySelector('svg') });
+              out.push({ tag: el.tagName, cls: String(el.className || '').slice(0, 80), aria: el.getAttribute('aria-label') || '', title: el.getAttribute('title') || '', svg: !!el.querySelector('svg'), dis: isDisabledEl(el) });
               if (out.length >= 10) return out;
             }
           }
@@ -541,9 +579,9 @@
       throw new Error('题目只填进去一部分(编辑器兼容问题,页面结构已回传)');
     }
 
-    // 发送按钮可能因 React/Vue 状态更新有延迟(填完字才 enable):最多等 2s
-    let btn = findSendButton(input);
-    for (let i = 0; i < 10 && (!btn || btn.disabled); i++) { await sleep(200); btn = findSendButton(input); }
+    // 发送键可能因框架状态更新有延迟(填完字才 enable):等到出现可用候选为止,最多 2.5s
+    let cands = sendCandidates(input);
+    for (let i = 0; i < 12 && !cands.length; i++) { await sleep(200); cands = sendCandidates(input); }
 
     // 发送校验:发出后编辑器会被清空(如元宝的 ql-blank),或题目出现在聊天容器里。
     // 发送失败是"AI 一直不回复"的隐形原因(按钮没点中/回车被编辑器吞了),必须显式验证。
@@ -558,20 +596,62 @@
       }
       return false;
     };
+    // 点击一个控件:先补 pointer/mouse 序列(有些框架只监听 pointerdown),
+    // 再走原生 click —— 只 dispatch click 时部分新式 UI 完全无反应
+    const clickEl = (c) => {
+      try {
+        const r = c.getBoundingClientRect();
+        const o = { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 0 };
+        if (typeof PointerEvent === 'function') {
+          c.dispatchEvent(new PointerEvent('pointerdown', o));
+          c.dispatchEvent(new PointerEvent('pointerup', o));
+        }
+        c.dispatchEvent(new MouseEvent('mousedown', o));
+        c.dispatchEvent(new MouseEvent('mouseup', o));
+      } catch (e) { /* 老浏览器忽略 */ }
+      try { c.click(); } catch (e) { /* ignore */ }
+    };
     // 逐个试候选控件(语义按钮 → 输入条右端的图标控件),每次点完都校验,谁有效用谁;
     // 全失败最后试回车。DeepSeek 的图标发送键没有"发送"字样,就靠这条兜底
     let sentBy = '未找到候选';
     let sent = false;
-    const cands = sendCandidates(input);
     for (const c of cands) {
-      try { c.click(); } catch (e) { /* ignore */ }
+      clickEl(c);
       sentBy = (c.getAttribute('aria-label') || c.getAttribute('title') || c.className || c.tagName).toString().slice(0, 60);
       if (await checkSent()) { sent = true; break; }
     }
     if (!sent) {
+      try { input.focus(); } catch (e) { /* ignore */ }
       pressEnter(input);
       sentBy = '回车';
       sent = await checkSent();
+    }
+    // 仍发不出去:多半是填充没进框架的 state(发送键虽可点但拿到的仍是空值)。
+    // 用"逐字符"再喂一遍(有些编辑器只认逐字输入),然后重试一次候选。
+    if (!sent) {
+      try {
+        input.focus();
+        if (typeof input.select === 'function') input.select();
+        for (const ch of String(msg.text)) {
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: ch, bubbles: true, cancelable: true }));
+          document.execCommand('insertText', false, ch);
+        }
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      } catch (e) { /* ignore */ }
+      await sleep(400);
+      const retry = sendCandidates(input);
+      for (const c of retry) {
+        clickEl(c);
+        sentBy = '逐字重填+' + (c.getAttribute('aria-label') || c.className || c.tagName).toString().slice(0, 40);
+        if (await checkSent()) { sent = true; break; }
+      }
+      if (!sent) {
+        try { input.focus(); } catch (e) { /* ignore */ }
+        pressEnter(input);
+        sentBy = '逐字重填+回车';
+        sent = await checkSent();
+      }
     }
     if (!sent) {
       probeReport('发送失败:消息留在输入框里(已试候选=' + cands.length + '个,最后=' + sentBy + ')');
