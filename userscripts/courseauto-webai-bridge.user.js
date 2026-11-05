@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         刷课助手 · 网页AI桥
 // @namespace    cx-auto-study
-// @version      1.2.0
+// @version      1.2.1
 // @description  配合「刷课助手」使用:接收题目 → 自动填入网页版 AI 输入框 → 发送 → 抓取回答 → 回传。免 API Key。
 // @author       courseauto contributors
 // @license      MIT
@@ -663,6 +663,8 @@
   announce();
   window.addEventListener('load', announce);
   window.addEventListener('focus', announce);
+  // 后台标签页被浏览器节流时定时器会断档;切回前台立即补一轮轮询,在线状态马上恢复
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) { announce(); relayLoop(); } });
   // 主页面刷新后 opener 引用可能重建,周期性重新通告
   setInterval(announce, 5000);
 
