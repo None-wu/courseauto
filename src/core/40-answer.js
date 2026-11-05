@@ -305,6 +305,8 @@
 
   // 本地中转实现:POST 放题 → 轮询取答案;中转服务不在线或桥脚本不在线都明确报错
   // 查询中转服务:目标 AI 站的桥是否在线(在线才有可能答題)
+  const RELAY_DOWN_HINT = '本地中转服务没在运行:请双击「刷课助手」exe 启动(黑色窗口),答题期间保持它开着';
+
   async function bridgeOnlineFor(site) {
     const base = (CONFIG.webAiRelay || 'http://127.0.0.1:8790').replace(/\/$/, '');
     try {
@@ -314,12 +316,24 @@
     } catch (e) { return false; }
   }
 
+  // 中转服务本身是否可达(区分「服务没开」和「桥不在线」,指引完全不同)
+  async function relayServerUp() {
+    const base = (CONFIG.webAiRelay || 'http://127.0.0.1:8790').replace(/\/$/, '');
+    try { await cxFetch(base + '/api/webai/status', { timeout: 5000 }); return true; }
+    catch (e) { return false; }
+  }
+
   async function relayAsk(text, timeoutMs, expect) {
     const base = (CONFIG.webAiRelay || 'http://127.0.0.1:8790').replace(/\/$/, '');
     let site = '';
     try { site = new URL(CONFIG.webAiUrl).host; } catch (e) { /* ignore */ }
     // 先验桥:AI 页的桥不在线就别把题扔进队列干等 60s,快速失败并给可执行指引
     if (site && !(await bridgeOnlineFor(site))) {
+      // 服务都没开就不用等:开多少个 AI 页也没用
+      if (!(await relayServerUp())) {
+        log(`⚠ ${RELAY_DOWN_HINT}`, 'err');
+        return { ok: true, result: { text: '', error: RELAY_DOWN_HINT } };
+      }
       log(`⚠ ${site} 的网页 AI 桥不在线:请打开「网页 AI 地址」页面(保持登录、别关标签页)并确认装了最新版「网页AI桥」`, 'warn');
       openWebAI();   // 点开始/答题通常紧跟用户操作,顺手尝试弹窗
       // 弹窗被拦/窗口最小化时页面刚被节流,心跳要几秒才能恢复:轮询最多 15s 再放弃
@@ -327,9 +341,14 @@
       let up = false;
       while (Date.now() < deadline) {
         await sleep(2);
+        if (!(await relayServerUp())) break;   // 等待期间服务被关,直接停
         if (await bridgeOnlineFor(site)) { up = true; break; }
       }
       if (!up) {
+        if (!(await relayServerUp())) {
+          log(`⚠ ${RELAY_DOWN_HINT}`, 'err');
+          return { ok: true, result: { text: '', error: RELAY_DOWN_HINT } };
+        }
         return { ok: true, result: { text: '', error: `${site} 的网页 AI 桥不在线(元宝页没开或没装/没刷新桥脚本)` } };
       }
       log('🔗 网页 AI 桥已上线,继续答题', 'ok');
@@ -531,13 +550,19 @@
     const base = (CONFIG.webAiRelay || 'http://127.0.0.1:8790').replace(/\/$/, '');
     let site = '';
     try { site = new URL(CONFIG.webAiUrl).host; } catch (e) { return true; }
-    const bridgeUp = async () => {
+    // 一次探测同时区分「中转服务没开」和「桥不在线」—— 两者的解决动作完全不同
+    const probe = async () => {
       try {
         const o = JSON.parse(await cxFetch(base + '/api/webai/status', { timeout: 5000 }));
-        return !!(o.ok && Array.isArray(o.sites) && o.sites.some((s) => s.host === site));
-      } catch (e) { return false; }
+        return { serverUp: true, bridgeUp: !!(o.ok && Array.isArray(o.sites) && o.sites.some((s) => s.host === site)) };
+      } catch (e) { return { serverUp: false, bridgeUp: false }; }
     };
-    if (await bridgeUp()) { log(`🔗 网页 AI 桥已在线(${site}),直接开始答题`, 'ok'); return true; }
+    let st = await probe();
+    if (st.bridgeUp) { log(`🔗 网页 AI 桥已在线(${site}),直接开始答题`, 'ok'); return true; }
+    if (!st.serverUp) {
+      log(`⚠ ${RELAY_DOWN_HINT}`, 'err');
+      return false;   // 服务没开,开 AI 页也没用,不空等 90s
+    }
     log(`🚀 先打开网页 AI 页面(${site}),等它就绪后开始答题...`, 'info');
     try { openWebAI(); } catch (e) { /* 非手势弹窗可能被拦,用户手动打开也一样 */ }
     const deadline = Date.now() + 90000;
@@ -545,7 +570,12 @@
     while (Date.now() < deadline) {
       await sleep(3);   // sleep 单位是秒
       if (PAUSED) return false;   // 等待期间用户点了暂停,放弃本轮
-      if (await bridgeUp()) { log(`🔗 网页 AI 桥已就绪(${site}),开始答题`, 'ok'); return true; }
+      st = await probe();
+      if (st.bridgeUp) { log(`🔗 网页 AI 桥已就绪(${site}),开始答题`, 'ok'); return true; }
+      if (!st.serverUp) {
+        log(`⚠ 中转服务被关掉了(黑窗口没了)。${RELAY_DOWN_HINT},再点「开始」重试`, 'err');
+        return false;
+      }
       if (Date.now() - lastLog > 15000) {
         lastLog = Date.now();
         log(`⏳ 仍在等网页 AI 页面就绪(需已打开且登录、标签页保持开着,自动开窗被拦时请手动打开)...`, 'warn');
