@@ -1,7 +1,9 @@
   /* ==================== 日志面板 ==================== */
   let logPanel = null;
   let logLines = [];
-  const STATS = { answered: 0, jobsDone: 0, jobsTotal: 0, startedAt: null };
+  // 运行时长按"实际工作中"累计:暂停时把已跑时长结算进 elapsedMs,恢复后从新起点计,
+  // startedAt 那套"上线时间戳"永远不减,暂停也在涨
+  const STATS = { answered: 0, jobsDone: 0, jobsTotal: 0, elapsedMs: 0, runSince: null };
 
   function escHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -13,13 +15,23 @@
     return h ? `${h}:${p(m)}:${p(ss)}` : `${p(m)}:${p(ss)}`;
   }
 
+  let lastStatusText = '';
   function setStatus(text) {
     const el = document.getElementById('cxStatus');
     if (el) {
       el.innerHTML = '<i></i>' + escHtml(text);
       el.className = 'cx-pill ' + (text === '工作中' ? 'run' : text === '已暂停' ? 'pause' : text === '出错' ? 'err' : 'idle');
     }
-    if (text === '工作中' && !STATS.startedAt) STATS.startedAt = Date.now();
+    // 计时钟:只在状态真正切换时启停,重复 setStatus('工作中') 不会把累计时长清零
+    if (text !== lastStatusText) {
+      if (text === '工作中') {
+        if (!STATS.runSince) STATS.runSince = Date.now();
+      } else if (STATS.runSince) {
+        STATS.elapsedMs += Date.now() - STATS.runSince;
+        STATS.runSince = null;
+      }
+      lastStatusText = text;
+    }
     // 状态文字右侧按钮:工作中(未暂停)→ 停止;待机/已暂停 → 开始
     const btn = document.getElementById('cxRunBtn');
     if (btn) btn.textContent = (text === '工作中' && !PAUSED) ? '⏸' : '▶';
@@ -283,15 +295,47 @@
       const t = document.getElementById('cxStatTime');
       if (j) j.textContent = STATS.jobsTotal ? (STATS.jobsDone + '/' + STATS.jobsTotal) : '—';
       if (a) a.textContent = String(STATS.answered);
-      if (t) t.textContent = STATS.startedAt ? fmtDur(Date.now() - STATS.startedAt) : '—';
+      if (t) {
+        const live = STATS.elapsedMs + (STATS.runSince ? Date.now() - STATS.runSince : 0);
+        t.textContent = (STATS.runSince || STATS.elapsedMs) ? fmtDur(live) : '—';
+      }
     }, 1000);
+  }
+
+  // 立即暂停:把当前页面(含同源 iframe)里正在播的视频/音频真正停住。
+  // 只置 PAUSED 标志不够 —— 挂机循环要等下一轮才看到,视频会继续播、进度继续走、
+  // 平台照记时长,手感上就是"点了暂停没反应"
+  function pausePageMedia(win, depth) {
+    win = win || window;
+    depth = depth || 0;
+    let n = 0;
+    try {
+      Array.from(win.document.querySelectorAll('video, audio')).forEach((m) => {
+        try { if (!m.paused) { m.pause(); n++; } } catch (e) { /* ignore */ }
+      });
+      if (depth < 3) {
+        Array.from(win.document.querySelectorAll('iframe')).forEach((f) => {
+          try { if (f.contentDocument) n += pausePageMedia(f.contentWindow, depth + 1); } catch (e) { /* 跨域跳过 */ }
+        });
+      }
+    } catch (e) { /* ignore */ }
+    return n;
   }
 
   let PAUSED = false;
   function togglePause() {
     PAUSED = !PAUSED;
-    setStatus(PAUSED ? '已暂停' : '工作中');
-    log(PAUSED ? '⏸ 已暂停挂机(当前任务完成后不再继续,点「开始」恢复)' : '▶ 已恢复挂机', PAUSED ? 'warn' : 'ok');
+    if (PAUSED) {
+      setStatus('已暂停');
+      const n = pausePageMedia();
+      log('⏸ 已暂停挂机' + (n ? `,已暂停 ${n} 个播放器` : '') + '(点 ▶ 恢复)', 'warn');
+    } else {
+      setStatus('工作中');
+      log('▶ 已恢复挂机', 'ok');
+      // 暂停会把挂机循环打断退出,而当前节/章的 iframe URL 没变,不会被当成"新页面"重扫;
+      // 这里主动让适配器重跑一轮(从当前进度继续,不重头来)
+      try { if (typeof resumeWatching === 'function') resumeWatching(); } catch (e) { /* ignore */ }
+    }
     // 恢复挂机且启用网页 AI 时:借用户手势自动拉起 AI 页,并验证桥是否在线
     if (!PAUSED && CONFIG.webAiEnabled && typeof openWebAI === 'function') {
       try { openWebAI(); } catch (e) { /* 弹窗被拦也不影响挂机 */ }

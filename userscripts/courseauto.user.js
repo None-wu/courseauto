@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         刷课助手(学习通/智慧树/雨课堂)
 // @namespace    cx-auto-study
-// @version      1.4.1
+// @version      1.4.2
 // @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
 // @author       courseauto contributors
 // @license      MIT
@@ -154,25 +154,29 @@
   const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
   const randomSleep = (min, max) => sleep(Math.floor(Math.random() * (max - min + 1)) + min);
 
-  function waitElementLoaded(win, selector, timeoutMs = 60000) {
+  // isAborted:可选回调。返回真表示本轮已被取消(用户点暂停 / 页面被切走),
+  // 立刻 reject 而不是死等到超时 —— 否则暂停后仍要等几十秒才生效
+  function waitElementLoaded(win, selector, timeoutMs = 60000, isAborted) {
     return new Promise((resolve, reject) => {
       const start = Date.now();
       const timer = setInterval(() => {
         try {
           if (win.document.querySelector(selector)) { clearInterval(timer); resolve(); return; }
         } catch (e) { /* iframe 未就绪 */ }
+        if (isAborted && isAborted()) { clearInterval(timer); reject(new Error('已取消(暂停或页面已切换)')); return; }
         if (Date.now() - start > timeoutMs) { clearInterval(timer); reject(new Error('等待元素超时: ' + selector)); }
       }, 200);
     });
   }
 
-  function waitIframeLoaded(iframe, timeoutMs = 60000) {
+  function waitIframeLoaded(iframe, timeoutMs = 60000, isAborted) {
     return new Promise((resolve, reject) => {
       const start = Date.now();
       const timer = setInterval(() => {
         try {
           if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') { clearInterval(timer); resolve(); return; }
         } catch (e) { /* ignore */ }
+        if (isAborted && isAborted()) { clearInterval(timer); reject(new Error('已取消(暂停或页面已切换)')); return; }
         if (Date.now() - start > timeoutMs) { clearInterval(timer); reject(new Error('iframe 加载超时')); }
       }, 200);
     });
@@ -209,7 +213,9 @@
   /* ==================== 日志面板 ==================== */
   let logPanel = null;
   let logLines = [];
-  const STATS = { answered: 0, jobsDone: 0, jobsTotal: 0, startedAt: null };
+  // 运行时长按"实际工作中"累计:暂停时把已跑时长结算进 elapsedMs,恢复后从新起点计,
+  // startedAt 那套"上线时间戳"永远不减,暂停也在涨
+  const STATS = { answered: 0, jobsDone: 0, jobsTotal: 0, elapsedMs: 0, runSince: null };
 
   function escHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -221,13 +227,23 @@
     return h ? `${h}:${p(m)}:${p(ss)}` : `${p(m)}:${p(ss)}`;
   }
 
+  let lastStatusText = '';
   function setStatus(text) {
     const el = document.getElementById('cxStatus');
     if (el) {
       el.innerHTML = '<i></i>' + escHtml(text);
       el.className = 'cx-pill ' + (text === '工作中' ? 'run' : text === '已暂停' ? 'pause' : text === '出错' ? 'err' : 'idle');
     }
-    if (text === '工作中' && !STATS.startedAt) STATS.startedAt = Date.now();
+    // 计时钟:只在状态真正切换时启停,重复 setStatus('工作中') 不会把累计时长清零
+    if (text !== lastStatusText) {
+      if (text === '工作中') {
+        if (!STATS.runSince) STATS.runSince = Date.now();
+      } else if (STATS.runSince) {
+        STATS.elapsedMs += Date.now() - STATS.runSince;
+        STATS.runSince = null;
+      }
+      lastStatusText = text;
+    }
     // 状态文字右侧按钮:工作中(未暂停)→ 停止;待机/已暂停 → 开始
     const btn = document.getElementById('cxRunBtn');
     if (btn) btn.textContent = (text === '工作中' && !PAUSED) ? '⏸' : '▶';
@@ -491,15 +507,47 @@
       const t = document.getElementById('cxStatTime');
       if (j) j.textContent = STATS.jobsTotal ? (STATS.jobsDone + '/' + STATS.jobsTotal) : '—';
       if (a) a.textContent = String(STATS.answered);
-      if (t) t.textContent = STATS.startedAt ? fmtDur(Date.now() - STATS.startedAt) : '—';
+      if (t) {
+        const live = STATS.elapsedMs + (STATS.runSince ? Date.now() - STATS.runSince : 0);
+        t.textContent = (STATS.runSince || STATS.elapsedMs) ? fmtDur(live) : '—';
+      }
     }, 1000);
+  }
+
+  // 立即暂停:把当前页面(含同源 iframe)里正在播的视频/音频真正停住。
+  // 只置 PAUSED 标志不够 —— 挂机循环要等下一轮才看到,视频会继续播、进度继续走、
+  // 平台照记时长,手感上就是"点了暂停没反应"
+  function pausePageMedia(win, depth) {
+    win = win || window;
+    depth = depth || 0;
+    let n = 0;
+    try {
+      Array.from(win.document.querySelectorAll('video, audio')).forEach((m) => {
+        try { if (!m.paused) { m.pause(); n++; } } catch (e) { /* ignore */ }
+      });
+      if (depth < 3) {
+        Array.from(win.document.querySelectorAll('iframe')).forEach((f) => {
+          try { if (f.contentDocument) n += pausePageMedia(f.contentWindow, depth + 1); } catch (e) { /* 跨域跳过 */ }
+        });
+      }
+    } catch (e) { /* ignore */ }
+    return n;
   }
 
   let PAUSED = false;
   function togglePause() {
     PAUSED = !PAUSED;
-    setStatus(PAUSED ? '已暂停' : '工作中');
-    log(PAUSED ? '⏸ 已暂停挂机(当前任务完成后不再继续,点「开始」恢复)' : '▶ 已恢复挂机', PAUSED ? 'warn' : 'ok');
+    if (PAUSED) {
+      setStatus('已暂停');
+      const n = pausePageMedia();
+      log('⏸ 已暂停挂机' + (n ? `,已暂停 ${n} 个播放器` : '') + '(点 ▶ 恢复)', 'warn');
+    } else {
+      setStatus('工作中');
+      log('▶ 已恢复挂机', 'ok');
+      // 暂停会把挂机循环打断退出,而当前节/章的 iframe URL 没变,不会被当成"新页面"重扫;
+      // 这里主动让适配器重跑一轮(从当前进度继续,不重头来)
+      try { if (typeof resumeWatching === 'function') resumeWatching(); } catch (e) { /* ignore */ }
+    }
     // 恢复挂机且启用网页 AI 时:借用户手势自动拉起 AI 页,并验证桥是否在线
     if (!PAUSED && CONFIG.webAiEnabled && typeof openWebAI === 'function') {
       try { openWebAI(); } catch (e) { /* 弹窗被拦也不影响挂机 */ }
@@ -2519,9 +2567,10 @@
       }
       log(`⏱ 今日已刷约 ${st.minutes} 分钟 / 上限 ${CONFIG.dailyLimitMinutes} 分钟`);
     }
-    await waitIframeLoaded(iframe);
+    await waitIframeLoaded(iframe, 60000, runAborted);
     const win = iframe.contentWindow;
-    await waitElementLoaded(win, '#video_html5_api', 90000);
+    const startHref = (function () { try { return win.location.href; } catch (e) { return ''; } })();
+    await waitElementLoaded(win, '#video_html5_api', 90000, () => runAborted() || !iframe.isConnected);
     let player = null;
     try { player = win.videojs('video_html5_api'); } catch (e) { /* ignore */ }
     if (!player) { log('无法获取播放器对象,跳过', 'err'); return; }
@@ -2533,6 +2582,13 @@
       let finished = false;
       let timer = null;
       let quizBusy = false;
+      // 卡死看门狗:进度 3 分钟不动、或 iframe 已被切走(播放器对象失效)就收手,
+      // 否则老轮次会一直空转,新页面永远等不到它结束
+      let lastCur = -1;
+      let lastProgressAt = Date.now();
+      const frameAlive = () => {
+        try { return iframe.isConnected && (!startHref || win.location.href === startHref); } catch (e) { return false; }
+      };
       const finish = () => {
         if (finished) return;
         finished = true;
@@ -2543,6 +2599,24 @@
         if (quizBusy) return;
         quizBusy = true;
         try {
+          if (runAborted()) {
+            try { player.pause(); } catch (e) { /* ignore */ }
+            log(PAUSED ? '⏸ 已暂停,视频停在此处(点 ▶ 从当前进度继续)' : '🔀 页面已切换,结束本任务点', 'warn');
+            finish();
+            return;
+          }
+          if (!frameAlive()) {
+            log('🔀 页面已切走,结束本任务点(等待按新页面重扫)', 'warn');
+            finish();
+            return;
+          }
+          const cur = (function () { try { return player.currentTime() || 0; } catch (e) { return 0; } })();
+          if (cur > lastCur + 0.01) { lastCur = cur; lastProgressAt = Date.now(); }
+          if (Date.now() - lastProgressAt > 180000) {
+            log('⚠ 视频 3 分钟没有进度,结束本任务点(避免卡死;可刷新页面重试)', 'warn');
+            finish();
+            return;
+          }
           if (player.paused()) {
             // 暂停 = 大概率是弹题,先在三个窗口里找题目(播放器iframe/章节iframe/顶层)
             await tryPopupQuiz([win, outerWin, window], player);
@@ -2574,9 +2648,9 @@
   }
 
   async function audioTask(iframe) {
-    await waitIframeLoaded(iframe);
+    await waitIframeLoaded(iframe, 60000, runAborted);
     const win = iframe.contentWindow;
-    await waitElementLoaded(win, '#audio_html5_api', 90000);
+    await waitElementLoaded(win, '#audio_html5_api', 90000, () => runAborted() || !iframe.isConnected);
     const audio = win.document.getElementById('audio_html5_api');
     audio.muted = true;
     audio.volume = 0;
@@ -2584,6 +2658,8 @@
     log('♪ 开始播放音频(静音)', 'ok');
     await new Promise((resolve) => {
       const timer = setInterval(() => {
+        if (runAborted()) { try { audio.pause(); } catch (e) { /* ignore */ } log('⏸ 已暂停,音频停在此处', 'warn'); clearInterval(timer); resolve(); return; }
+        if (!iframe.isConnected) { clearInterval(timer); resolve(); return; }
         if (audio.ended) { clearInterval(timer); resolve(); return; }
         if (audio.paused) { try { audio.play().catch(() => { /* ignore */ }); } catch (e) { /* ignore */ } }
       }, 2000);
@@ -2628,6 +2704,7 @@
   async function answerQuizElements(win, els, label) {
     let okCount = 0;
     for (let i = 0; i < els.length; i++) {
+      if (runAborted()) { log(`⏸ 已暂停,第 ${i + 1}/${els.length} 题起停止`, 'warn'); break; }
       const el = els[i];
       await randomSleep(CONFIG.answerIntervalMin, CONFIG.answerIntervalMax);
       const isWorkEl = /questionLi|mark_item|question-item|q_item/.test(el.className || '');
@@ -2644,11 +2721,14 @@
   }
 
   async function workTask(iframe) {
-    try { await waitIframeLoaded(iframe); } catch (e) { /* 超时也继续尝试:内容可能已可读 */ }
+    try { await waitIframeLoaded(iframe, 60000, () => runAborted() || !iframe.isConnected); } catch (e) {
+      if (runAborted() || !iframe.isConnected) return;
+    }   // 超时也继续尝试:内容可能已可读
     const outerWin = iframe.contentWindow;
     // 等题目出现:新版内层 iframe 常懒加载,最多等 20s。不再强依赖"必须存在内层 iframe"
     let quiz = null;
     for (let i = 0; i < 40 && !quiz; i++) {
+      if (runAborted()) return;
       quiz = findQuizTree(outerWin);
       if (!quiz) await sleep(0.5);
     }
@@ -2703,9 +2783,9 @@
     if (CONFIG.webAiEnabled && CONFIG.webAiBatch) batchMap = await askBatchWebAI(tasks);
     for (let i = 0; i < tasks.length; i++) {
       const { q, el } = tasks[i];
-      if (PAUSED) { pausedMid = true; log(`⏸ 已暂停,第 ${i + 1}/${tasks.length} 题起停止(点「开始」恢复后刷新重跑)`, 'warn'); break; }
+      if (runAborted()) { pausedMid = true; log(`⏸ 已暂停,第 ${i + 1}/${tasks.length} 题起停止(点「开始」恢复后刷新重跑)`, 'warn'); break; }
       await randomSleep(CONFIG.answerIntervalMin, CONFIG.answerIntervalMax);
-      if (PAUSED) { pausedMid = true; log(`⏸ 已暂停,第 ${i + 1}/${tasks.length} 题起停止`, 'warn'); break; }
+      if (runAborted()) { pausedMid = true; log(`⏸ 已暂停,第 ${i + 1}/${tasks.length} 题起停止`, 'warn'); break; }
       let answers = (batchMap && batchMap[i]) || [];
       if (answers.length) {
         STATS.answered++;
@@ -2771,7 +2851,7 @@
 
   async function homeworkTask() {
     initPanel();
-    await waitElementLoaded(window, '.questionLi', 30000);
+    await waitElementLoaded(window, '.questionLi', 30000, runAborted);
     // 网页 AI 模式:先把 AI 页拉起来、桥在线后才开始答题(未就绪不空跑)
     if (CONFIG.webAiEnabled && !(await webAiStartupGate())) return;
     if (window.document.querySelector('.font-cxsecret') || extractFontBase64(window)) {
@@ -2800,9 +2880,9 @@
     }
     let okCount = 0;
     for (let i = 0; i < els.length; i++) {
-      if (PAUSED) { log(`⏸ 已暂停,第 ${i + 1}/${els.length} 题起停止(点「开始」恢复后刷新重跑)`, 'warn'); break; }
+      if (runAborted()) { log(`⏸ 已暂停,第 ${i + 1}/${els.length} 题起停止(点「开始」恢复后刷新重跑)`, 'warn'); break; }
       await randomSleep(CONFIG.answerIntervalMin, CONFIG.answerIntervalMax);
-      if (PAUSED) { log(`⏸ 已暂停,第 ${i + 1}/${els.length} 题起停止`, 'warn'); break; }
+      if (runAborted()) { log(`⏸ 已暂停,第 ${i + 1}/${els.length} 题起停止`, 'warn'); break; }
       const q = qs[i];
       if (!q) continue;
       let answers = (batchMap && batchMap[i]) || [];
@@ -2822,6 +2902,17 @@
   /* ==================== 章节主循环 ==================== */
   let running = false;
   let lastIframeUrl = '';
+  let pendingRun = false;   // 跑任务时页面被切走:收手后按新页面重扫,而不是把新 URL 记下来当"已完成"
+  let runEpoch = 0;         // 页面切换时自增;正在跑的那轮发现令牌变了立刻收手(旧 DOM 已失效,继续干只会空转)
+  let activeEpoch = 0;
+
+  // 本轮是否该收手:用户点了暂停,或页面已被切走
+  const runAborted = () => PAUSED || activeEpoch !== runEpoch;
+
+  // 诊断用(排查"切页后不动了"):控制台执行 __cxRunState() 看轮次令牌与运行标志
+  try {
+    window.__cxRunState = () => ({ epoch: runEpoch, active: activeEpoch, running, pending: pendingRun, paused: PAUSED, url: lastIframeUrl });
+  } catch (e) { /* ignore */ }
 
   // 通用:按可见文本点击元素(tab/按钮)
   function clickByText(win, texts) {
@@ -2879,6 +2970,7 @@
   // 新版知识卡片循环(2025-2026 knowledge/cards 结构:卡片内嵌视频/图片/检测模块,顶层切节)
   async function newChapterLoop(cardsWin) {
     log('🧭 检测到新版知识卡片结构,启用新适配', 'ok');
+    if (runAborted()) return;
     const limitHit = () => {
       try {
         const txt = String(document.body ? document.body.textContent : '') + ' ' + String(cardsWin.document.body ? cardsWin.document.body.textContent : '');
@@ -2924,6 +3016,7 @@
       }
     }
     // 2) 视频任务(平台未限流时)
+    if (runAborted()) { log('⏸ 已暂停,跳过后续任务', 'warn'); return; }
     if (!limitHit()) {
       let videoFrame = null;
       for (let i = 0; i < 20 && !videoFrame; i++) {
@@ -2948,6 +3041,7 @@
       if (pdfFrame) await pdfTask(pdfFrame);
     }
     // 4) 切下一节
+    if (runAborted()) return;
     await sleep(0.3);
     if (CONFIG.autoJump && clickNextSection()) {
       log('→ 切换到下一节', 'ok');
@@ -2957,9 +3051,11 @@
   }
 
   async function chapterLoop() {
-    await waitElementLoaded(window, '#iframe', 30000);
+    await waitElementLoaded(window, '#iframe', 30000, runAborted);
     const cardsIframe = document.querySelector('#iframe');
-    await waitIframeLoaded(cardsIframe);
+    if (!cardsIframe) return;
+    await waitIframeLoaded(cardsIframe, 60000, runAborted);
+    if (runAborted()) return;
     let cardsWin = null;
     try { cardsWin = cardsIframe.contentWindow; } catch (e) {
       log('章节 iframe 无法访问(跨域),请确认页面域名与脚本匹配', 'err');
@@ -2992,7 +3088,7 @@
     }
     let finishedCount = 0;
     for (const icon of Array.from(icons)) {
-      if (PAUSED) { log('⏸ 已暂停,本轮任务停止(点面板 ▶ 恢复)', 'warn'); return; }
+      if (runAborted()) { if (PAUSED) log('⏸ 已暂停,本轮任务停止(点 ▶ 恢复)', 'warn'); return; }
       if (dailyLimitReached) { log('⏹ 今日刷课已到上限,停止任务处理', 'warn'); return; }
       const parent = icon.parentElement;
       if (parent && parent.classList.contains('ans-job-finished')) { finishedCount++; continue; }
@@ -3034,11 +3130,14 @@
           }
         }
       } catch (e) {
+        if (runAborted()) return;   // 暂停/切页导致的取消,不当成异常刷屏
         log(`任务处理异常: ${e.message}`, 'err');
       }
+      if (runAborted()) { if (PAUSED) log('⏸ 已暂停,本轮任务停止(点 ▶ 恢复)', 'warn'); return; }
       await sleep(0.3);
     }
     log(`本章扫描结束(共 ${icons.length} 个任务点)`, 'ok');
+    if (runAborted()) return;
     if (CONFIG.autoJump) {
       const next = document.querySelector('.nextChapter');
       if (next) { log('→ 切换到下一章'); next.click(); }
@@ -3049,24 +3148,69 @@
   function startWatch() {
     initPanel();
     log('挂机引擎已启动,开始扫描任务点...', 'ok');
-    setInterval(async () => {
+    let seenUrl = '';
+    let seenSince = Date.now();
+    setInterval(() => {
       try {
         const f = document.querySelector('#iframe');
         if (!f || !f.contentWindow) return;
         let url = '';
         try { url = f.contentWindow.location.href; } catch (e) { return; }
-        if (url !== lastIframeUrl) {
-          lastIframeUrl = url;
-          if (!running) {
-            running = true;
-            setStatus('工作中');
-            try { await chapterLoop(); } catch (e) { log('主循环异常: ' + e.message, 'err'); }
-            running = false;
-            setStatus('待机');
-          }
+        const now = Date.now();
+        // 页面切换有中间态(about:blank、加载中的旧地址)。先记下来,等它稳定 1.2s 再认,
+        // 否则中间态会被当成"用户切了页面",把刚起来的那轮反复作废
+        if (url !== seenUrl) { seenUrl = url; seenSince = now; return; }
+        if (url === lastIframeUrl) return;
+        if (now - seenSince < 1200) return;
+        lastIframeUrl = url;
+        runEpoch++;   // 旧轮手里的 iframe/DOM 已经是上一条页面了
+        if (running) {
+          // 用户手动切了章节/课程:老的一轮还在对着旧 iframe 干活。
+          // 以前这里只更新 URL 就直接 return,等老的一轮(可能永远卡在失效播放器上)结束后,
+          // 新 URL 已被"消费",再也不会触发扫描 —— 表现就是"切了页面脚本就不动了"
+          pendingRun = true;
+          log('🔀 检测到页面已切换,当前任务收手后按新页面重扫', 'warn');
+          return;
         }
+        runOnce();
       } catch (e) { /* ignore */ }
-    }, 3000);
+    }, 1000);
+  }
+
+  async function runOnce() {
+    if (running) { pendingRun = true; return; }
+    if (PAUSED) return;
+    running = true;
+    pendingRun = false;
+    activeEpoch = ++runEpoch;
+    setStatus('工作中');
+    try {
+      await chapterLoop();
+    } catch (e) {
+      if (!runAborted()) log('主循环异常: ' + e.message, 'err');
+    } finally {
+      running = false;
+      setStatus(PAUSED ? '已暂停' : '待机');
+      const again = pendingRun;
+      pendingRun = false;
+      if (again && !PAUSED) runOnce();
+    }
+  }
+
+  // 面板点「恢复」时调用:重跑一轮(暂停时循环是中断退出的,URL 没变不会自动触发)
+  function resumeWatching() {
+    if (!ACTIVE_ADAPTER || ACTIVE_ADAPTER.id !== 'chaoxing') return;
+    let kind = 'chapter';
+    try { kind = ACTIVE_ADAPTER.pageKind ? ACTIVE_ADAPTER.pageKind() : 'chapter'; } catch (e) { /* ignore */ }
+    if (kind !== 'chapter') return;
+    if (running) { pendingRun = true; return; }
+    // 先把"当前 URL"记为已处理,再重跑;否则下一轮扫描会把同一个 URL 当成"用户切了页面",
+    // 立刻把刚起来的这轮又作废(表现为恢复后视频反复重开)
+    try {
+      const f = document.querySelector('#iframe');
+      if (f && f.contentWindow) lastIframeUrl = f.contentWindow.location.href;
+    } catch (e) { /* ignore */ }
+    runOnce();
   }
 
   /* ==================== 适配器:学习通 ==================== */

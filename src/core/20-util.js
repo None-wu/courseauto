@@ -2,25 +2,29 @@
   const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
   const randomSleep = (min, max) => sleep(Math.floor(Math.random() * (max - min + 1)) + min);
 
-  function waitElementLoaded(win, selector, timeoutMs = 60000) {
+  // isAborted:可选回调。返回真表示本轮已被取消(用户点暂停 / 页面被切走),
+  // 立刻 reject 而不是死等到超时 —— 否则暂停后仍要等几十秒才生效
+  function waitElementLoaded(win, selector, timeoutMs = 60000, isAborted) {
     return new Promise((resolve, reject) => {
       const start = Date.now();
       const timer = setInterval(() => {
         try {
           if (win.document.querySelector(selector)) { clearInterval(timer); resolve(); return; }
         } catch (e) { /* iframe 未就绪 */ }
+        if (isAborted && isAborted()) { clearInterval(timer); reject(new Error('已取消(暂停或页面已切换)')); return; }
         if (Date.now() - start > timeoutMs) { clearInterval(timer); reject(new Error('等待元素超时: ' + selector)); }
       }, 200);
     });
   }
 
-  function waitIframeLoaded(iframe, timeoutMs = 60000) {
+  function waitIframeLoaded(iframe, timeoutMs = 60000, isAborted) {
     return new Promise((resolve, reject) => {
       const start = Date.now();
       const timer = setInterval(() => {
         try {
           if (iframe.contentDocument && iframe.contentDocument.readyState === 'complete') { clearInterval(timer); resolve(); return; }
         } catch (e) { /* ignore */ }
+        if (isAborted && isAborted()) { clearInterval(timer); reject(new Error('已取消(暂停或页面已切换)')); return; }
         if (Date.now() - start > timeoutMs) { clearInterval(timer); reject(new Error('iframe 加载超时')); }
       }, 200);
     });
