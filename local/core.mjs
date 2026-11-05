@@ -194,16 +194,14 @@ export function createCore({ getAsset, probeDir }) {
       return true;
     }
     if (p === '/api/webai/status') {                              // 诊断:AI 页是否在线
-      // 在线窗口放宽到 60s:浏览器对后台标签页强节流(Edge 数分钟后定时器降到 1 次/分钟),
-      // 2s 心跳在后台必然断档;窗口太短会把"切去后台但开着的 AI 页"误判成离线,面板反复横跳
       const sites = [];
       for (const [host, info] of webaiBridgeSites) {
         const t = info && info.at;
-        if (t && Date.now() - t < 60000) sites.push({ host, ver: info.ver });
+        if (t && Date.now() - t < 10000) sites.push({ host, ver: info.ver });
       }
       json(res, 200, {
         ok: true,
-        bridgeOnline: Date.now() - webaiBridgeSeenAt < 60000,
+        bridgeOnline: Date.now() - webaiBridgeSeenAt < 10000,
         bridgeSeenAgo: webaiBridgeSeenAt ? Date.now() - webaiBridgeSeenAt : null,
         sites,
         pending: webaiQueue.length
