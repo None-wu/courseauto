@@ -124,7 +124,7 @@ npm run setup
 
 **不想装油猴、或者要给同学用？** 直接下免安装版（Windows，双击即用，自带安装向导）：
 
-👉 **[下载 courseauto-v1.4.3.exe](https://github.com/None-wu/courseauto/releases/latest)**（单文件，含网页 AI 中转；压缩包与使用说明在同一个 Release 里）
+👉 **[下载 courseauto-v1.4.4.exe](https://github.com/None-wu/courseauto/releases/latest)**（单文件，含网页 AI 中转；压缩包与使用说明在同一个 Release 里）
 
 > **从旧版升级（v1.3.x → v1.4.0）**：这一版把项目改名为 **courseauto / 刷课助手**，脚本 `@name`、安装地址、
 > 仓库地址全变了，油猴会把它当成一个新脚本。**先在油猴面板删掉旧的「网课助手」，再装新的**，
@@ -313,6 +313,13 @@ npm run test:all    # 10 个套件:学习通主流程/网页AI/测验/新版结�
 ---
 
 ## 📝 更新日志
+
+### v1.4.4 — DeepSeek 新输入条发送失败
+
+- **现象**：题目已经填进 DeepSeek 输入框，但发不出去，脚本随后判「无答案」
+- **原因**：DeepSeek 换成受控输入条（textarea + 无文字的圆形图标发送键）。只改 DOM 值不更新框架状态，发送键始终置灰、回车也被忽略
+- **修法**：填充改走浏览器编辑管线（`execCommand('insertText')`，事件可信）；发送时跳过置灰控件、优先主色圆钮、补 pointer 序列；全失败再逐字符重填 + 回车兜底
+- 探针新增 `dis` 字段，可远程判断发送键是否置灰；新增 `/ai-ds` 模拟页与反证测试，已并入 `test:all`
 
 ### v1.4.3 — 故障提示修正
 
