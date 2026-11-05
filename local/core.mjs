@@ -134,6 +134,7 @@ export function createCore({ getAsset, probeDir }) {
       const wantSite = url.searchParams.get('site') || '';
       const wantVer = url.searchParams.get('v') || '?';
       const wantCap = url.searchParams.get('cap') === '1';
+      const tick = url.searchParams.get('tick') === '1';   // 桥是否跑在节流免疫时钟上(诊断用)
       webaiBridgeSeenAt = Date.now();
       // 版本压制:同一站点可能开着多个 AI 标签页(含没刷新的旧版桥)。旧版桥会抢题却答不好,
       // 所以 30 秒内见过更高版本的桥,就让低版本桥只轮询不取题。
@@ -145,7 +146,7 @@ export function createCore({ getAsset, probeDir }) {
           return json(res, 200, { ok: true, item: null, stale: true, current: prev.ver }), true;
         }
         const capAt = wantCap ? Date.now() : (prev.capAt || 0);
-        webaiBridgeSites.set(wantSite, { at: Date.now(), ver: wantVer, capAt });
+        webaiBridgeSites.set(wantSite, { at: Date.now(), ver: wantVer, capAt, tick });
         if (!wantCap && Date.now() - capAt < 30000) {
           return json(res, 200, { ok: true, item: null, noInput: true }), true;   // 没有输入框的页面不派题
         }
@@ -197,11 +198,12 @@ export function createCore({ getAsset, probeDir }) {
       const sites = [];
       for (const [host, info] of webaiBridgeSites) {
         const t = info && info.at;
-        if (t && Date.now() - t < 10000) sites.push({ host, ver: info.ver });
+        // 在线窗口 30s:容忍后台页偶发断档(桥 1.3.0 已用 Worker 心跳,正常 2s 一跳)
+        if (t && Date.now() - t < 30000) sites.push({ host, ver: info.ver, tick: !!info.tick });
       }
       json(res, 200, {
         ok: true,
-        bridgeOnline: Date.now() - webaiBridgeSeenAt < 10000,
+        bridgeOnline: Date.now() - webaiBridgeSeenAt < 30000,
         bridgeSeenAgo: webaiBridgeSeenAt ? Date.now() - webaiBridgeSeenAt : null,
         sites,
         pending: webaiQueue.length

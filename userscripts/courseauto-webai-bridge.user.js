@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         刷课助手 · 网页AI桥
 // @namespace    cx-auto-study
-// @version      1.2.0
+// @version      1.3.0
 // @description  配合「刷课助手」使用:接收题目 → 自动填入网页版 AI 输入框 → 发送 → 抓取回答 → 回传。免 API Key。
 // @author       courseauto contributors
 // @license      MIT
@@ -67,7 +67,32 @@
   const REPLY_STABLE_MS = 1500;   // 回复文本稳定这么久才算说完
   const REPLY_TIMEOUT_MS = 90000; // 单题默认等待上限(整卷会按题目数放大,见 waitForAnswer)
 
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  /* ==================== 节流免疫时钟 ====================
+   * Edge/Chrome 对后台标签页的 setTimeout/setInterval 强节流:页面退后台几分钟后,
+   * 定时器被压到约 1 次/分钟 —— 桥的 2s 心跳断档 → 中转判离线 → 答题被"桥不在线"
+   * 快速失败;waitForAnswer 的 0.4s 采样同样断档 → 等不到回复就超时。
+   * 这就是"一开始能答,刷课久了再答题就不行"的根因。
+   * 专用 Worker 里的定时器不受该节流(Worker 没有"后台"概念),用它发 tick
+   * 驱动桥内所有等待;Worker 建不出来(个别站 CSP 限制)则退回原生定时器。 */
+  const TICK_MS = 400;
+  const ticker = (function () {
+    try {
+      const src = 'setInterval(function(){postMessage(1)},' + TICK_MS + ');';
+      const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+      const w = new Worker(url);
+      URL.revokeObjectURL(url);
+      return w;
+    } catch (e) { return null; }
+  })();
+  const sleep = (ms) => {
+    if (!ticker) return new Promise((r) => setTimeout(r, ms));
+    const ticks = Math.max(1, Math.round(ms / TICK_MS));
+    return new Promise((resolve) => {
+      let left = ticks;
+      const on = () => { if (--left <= 0) { ticker.removeEventListener('message', on); resolve(); } };
+      ticker.addEventListener('message', on);
+    });
+  };
   // 调试输出:只在页面里设了 window.__cxBridgeDebug = true 时打印(排查"抓不到回复"用)
   const dbg = function () {
     try { if (window.__cxBridgeDebug) console.log.apply(console, ['[bridge]'].concat(Array.prototype.slice.call(arguments))); } catch (e) { /* ignore */ }
@@ -615,7 +640,7 @@
       // 但带 cap=0,服务端就不会把题派给这种页面 —— 派了也答不了,题目白丢,
       // 主脚本只能干等到超时再逐题重问("没答完就一个一个发"的隐蔽原因之一)
       const cap = !!findInput();
-      const r = await xfetch(RELAY + '/api/webai/next?site=' + encodeURIComponent(location.host) + '&v=' + encodeURIComponent(BRIDGE_VER) + '&cap=' + (cap ? 1 : 0), { method: 'GET' });
+      const r = await xfetch(RELAY + '/api/webai/next?site=' + encodeURIComponent(location.host) + '&v=' + encodeURIComponent(BRIDGE_VER) + '&cap=' + (cap ? 1 : 0) + '&tick=' + (ticker ? 1 : 0), { method: 'GET' });
       const o = await r.json();
       // 角标变绿:本站桥已成功连上中转服务
       try { if (window.__cxBridgeBadge) window.__cxBridgeBadge.style.background = 'rgba(40,150,80,.85)'; } catch (e) {}
@@ -657,14 +682,24 @@
     } catch (e) { /* 本地服务不在线,静默等下一轮 */ }
     relayBusy = false;
   }
-  setInterval(relayLoop, 2000);
-  relayLoop();
+  // 心跳/派题循环改由 tick 驱动:顺序执行不重叠,后台也不停摆
+  (async function relayDriver() {
+    for (;;) {
+      try { await relayLoop(); } catch (e) { /* 下一轮再试 */ }
+      await sleep(2000);
+    }
+  })();
 
   announce();
   window.addEventListener('load', announce);
   window.addEventListener('focus', announce);
-  // 主页面刷新后 opener 引用可能重建,周期性重新通告
-  setInterval(announce, 5000);
+  // 主页面刷新后 opener 引用可能重建,周期性重新通告(同样走节流免疫时钟)
+  (async function announceDriver() {
+    for (;;) {
+      announce();
+      await sleep(5000);
+    }
+  })();
 
   // 注入角标:AI 页右下角显示「桥 v版本」,红色=还没连上中转,绿色=轮询正常。
   // 用来一眼分辨"桥没注入/桥连不上中转"这两类故障

@@ -322,8 +322,14 @@
     if (site && !(await bridgeOnlineFor(site))) {
       log(`⚠ ${site} 的网页 AI 桥不在线:请打开「网页 AI 地址」页面(保持登录、别关标签页)并确认装了最新版「网页AI桥」`, 'warn');
       openWebAI();   // 点开始/答题通常紧跟用户操作,顺手尝试弹窗
-      await sleep(5);
-      if (!(await bridgeOnlineFor(site))) {
+      // 弹窗被拦/窗口最小化时页面刚被节流,心跳要几秒才能恢复:轮询最多 15s 再放弃
+      const deadline = Date.now() + 15000;
+      let up = false;
+      while (Date.now() < deadline) {
+        await sleep(2);
+        if (await bridgeOnlineFor(site)) { up = true; break; }
+      }
+      if (!up) {
         return { ok: true, result: { text: '', error: `${site} 的网页 AI 桥不在线(元宝页没开或没装/没刷新桥脚本)` } };
       }
       log('🔗 网页 AI 桥已上线,继续答题', 'ok');
