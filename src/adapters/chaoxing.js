@@ -2356,10 +2356,32 @@
 
   // 面板点「恢复」时调用:重跑一轮(暂停时循环是中断退出的,URL 没变不会自动触发)
   function resumeWatching() {
-    if (!ACTIVE_ADAPTER || ACTIVE_ADAPTER.id !== 'chaoxing') return;
+    if (!ACTIVE_ADAPTER) return;
+    // 智慧树 / 雨课堂:循环体是 while(!PAUSED),暂停即退出,重跑就是从当前进度继续
+    if (ACTIVE_ADAPTER.id === 'zhihuishu') {
+      try { zhihuishuLoop(); } catch (e) { log('智慧树循环重启失败: ' + e.message, 'err'); }
+      return;
+    }
+    if (ACTIVE_ADAPTER.id === 'yuketang') {
+      try { yuketangLoop(); } catch (e) { log('雨课堂循环重启失败: ' + e.message, 'err'); }
+      return;
+    }
+    if (ACTIVE_ADAPTER.id !== 'chaoxing') return;
     let kind = 'chapter';
     try { kind = ACTIVE_ADAPTER.pageKind ? ACTIVE_ADAPTER.pageKind() : 'chapter'; } catch (e) { /* ignore */ }
+    // 作业页:暂停时 homeworkTask 根本没启动,这里从头跑一遍(不会自动交卷)
+    if (kind === 'homework') {
+      try { homeworkTask(); } catch (e) { if (!runAborted()) log('作业流程启动失败: ' + e.message, 'err'); }
+      return;
+    }
     if (kind !== 'chapter') return;
+    // 旧版章节页:先切 mooc2。跳转会重载页面,这里放行一次自动开始,免得重载后又被停在暂停
+    if (!location.href.includes('mooc2=1')) {
+      log('检测到旧版章节页,正在切换到新版(mooc2)...', 'warn');
+      setForceRunOnce();
+      location.href += (location.href.includes('?') ? '&' : '?') + 'mooc2=1';
+      return;
+    }
     if (running) { pendingRun = true; return; }
     // 先把"当前 URL"记为已处理,再重跑;否则下一轮扫描会把同一个 URL 当成"用户切了页面",
     // 立刻把刚起来的这轮又作废(表现为恢复后视频反复重开)
@@ -2409,11 +2431,13 @@
     },
     snapshotHints: { jobIcon: '.ans-job-icon', quiz: '.TiMu' },
     start() {
+      initPanel();
+      // 关闭「进入页面自动开始」时:面板照常挂出,但业务循环不启动,状态停在「已暂停」
+      if (!autoStartEnabled()) { holdAtPausedStart(); return; }
       if (this.pageKind() === 'homework') {
         homeworkTask();
         return;
       }
-      initPanel();
       if (!location.href.includes('mooc2=1')) {
         log('检测到旧版章节页,正在切换到新版(mooc2)...', 'warn');
         location.href += (location.href.includes('?') ? '&' : '?') + 'mooc2=1';

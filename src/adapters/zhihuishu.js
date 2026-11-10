@@ -149,6 +149,8 @@
     },
     start() {
       initPanel();
+      // 关闭「进入页面自动开始」时:只挂面板,循环不启动,状态停在「已暂停」
+      if (!autoStartEnabled()) { holdAtPausedStart(); return; }
       if (this.pageKind() === 'quiz') {
         log('智慧树测验页:实验阶段只支持视频页,测验请用学习通那套流程手动完成', 'warn');
         return;

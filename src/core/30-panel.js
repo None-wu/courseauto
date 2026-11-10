@@ -358,6 +358,42 @@
   }
 
   let PAUSED = false;
+
+  // 「进入页面自动开始」开关:默认开启;关掉时进页面只挂面板,不跑业务循环
+  // 例外:用户在暂停态点 ▶ 且触发了整页跳转(如旧版章节页切 mooc2),跳转后要放行一次,
+  // 否则重载后又被自动停在暂停,表现成"点了开始还是不动"
+  const FORCE_RUN_KEY = 'cxForceRunOnce';
+  function setForceRunOnce() {
+    try {
+      if (typeof GM_setValue !== 'undefined') GM_setValue(FORCE_RUN_KEY, true);
+      else sessionStorage.setItem(FORCE_RUN_KEY, '1');
+    } catch (e) { /* ignore */ }
+  }
+  function consumeForceRunOnce() {
+    try {
+      if (typeof GM_getValue !== 'undefined') {
+        if (!GM_getValue(FORCE_RUN_KEY, false)) return false;
+        GM_setValue(FORCE_RUN_KEY, false);
+        return true;
+      }
+      if (sessionStorage.getItem(FORCE_RUN_KEY) !== '1') return false;
+      sessionStorage.removeItem(FORCE_RUN_KEY);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function autoStartEnabled() {
+    if (CONFIG.autoStart !== false) { consumeForceRunOnce(); return true; }
+    return consumeForceRunOnce();
+  }
+
+  // 关掉自动开始时的启动态:停在暂停、状态显示「已暂停」,等用户点 ▶
+  function holdAtPausedStart() {
+    PAUSED = true;
+    setStatus('已暂停');
+    log('⏸ 已按设置停在暂停状态(设置里「进入页面自动开始」为关闭),点 ▶ 开始刷课', 'warn');
+  }
+
   function togglePause() {
     PAUSED = !PAUSED;
     if (PAUSED) {
@@ -397,6 +433,9 @@
       '<div class="cfgHead">⚙ 设置<small>改完记得点右下「保存」</small><button id="cfgClose" type="button" title="关闭">×</button></div>' +
       '<div class="cfgBody">' +
       '<div class="sec">🎬 播放与节奏</div>' +
+      '<div class="field"><div class="row"><div class="label">🚀 进入页面自动开始</div>' +
+        '<input id="cfgAutoStart" type="checkbox" ' + (CONFIG.autoStart !== false ? 'checked' : '') + '></div>' +
+        '<div class="hint">开(默认):一进课程/作业页就自动答题刷课。关:进页面先停在「已暂停」,看完页面确认是这一节再点 ▶ 开始;保存后下次进入页面生效</div></div>' +
       '<div class="field"><div class="row"><div class="label">🎬 视频倍速</div></div>' +
         '<input id="cfgSpeed" type="number" step="0.25" min="1" max="2" value="' + CONFIG.speed + '">' +
         '<div class="hint">默认 2x(最快);1 = 原速最安全,2x 被检测风险最高,自行权衡</div></div>' +
@@ -496,6 +535,17 @@
       CONFIG.webAiUrl = document.getElementById('cfgWebAiUrl').value.trim() || 'https://chat.deepseek.com/';
       CONFIG.deliberateErrorRate = (parseFloat(document.getElementById('cfgErrRate').value) || 0) / 100;
       CONFIG.autoSubmit = document.getElementById('cfgSubmit').checked;
+      // 进入页面是否自动开始(下次进入页面生效,不打断当前这一轮)
+      {
+        const asEl = document.getElementById('cfgAutoStart');
+        const prevAuto = CONFIG.autoStart !== false;
+        CONFIG.autoStart = asEl ? asEl.checked : true;
+        if (prevAuto !== CONFIG.autoStart) {
+          log(CONFIG.autoStart
+            ? '🚀 已开启「进入页面自动开始」:下次进页面直接开始刷课'
+            : '🚀 已关闭「进入页面自动开始」:下次进页面会停在暂停状态,点 ▶ 才开始', 'ok');
+        }
+      }
       // 定时关闭:HH:MM,填空 = 不关闭;格式非法则回滚到旧值并提示
       {
         const stopEl = document.getElementById('cfgStopAt');

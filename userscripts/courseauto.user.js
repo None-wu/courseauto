@@ -1,7 +1,7 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @name         刷课助手(学习通/智慧树/雨课堂)
 // @namespace    cx-auto-study
-// @version      1.5.4
+// @version      1.5.5
 // @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
 // @author       courseauto contributors
 // @license      MIT
@@ -72,6 +72,7 @@
     submitDelayMin: 0,     // 提交前最小延迟(秒,0=最快)
     submitDelayMax: 0,     // 提交前最大延迟(秒,0=最快)
     stopAtTime: '',        // 定时关闭(HH:MM),到点自动停止挂机;留空 = 不关闭
+    autoStart: true,       // 进入页面立即开始答题刷课;关掉 = 进页面先停在暂停态,手动点 ▶ 才开始
     accCheckEnabled: false, // 提交后检测准确率(仅对「可重复提交」的任务点生效)
     minAccuracy: 0.9,      // 提交后要求的准确率,低于则重问错题(需 accCheckEnabled)
     accFixAllWrong: true,  // 只要有错题就去修(不看整体准确率);关掉则仅在低于 minAccuracy 时才修
@@ -927,6 +928,42 @@
   }
 
   let PAUSED = false;
+
+  // 「进入页面自动开始」开关:默认开启;关掉时进页面只挂面板,不跑业务循环
+  // 例外:用户在暂停态点 ▶ 且触发了整页跳转(如旧版章节页切 mooc2),跳转后要放行一次,
+  // 否则重载后又被自动停在暂停,表现成"点了开始还是不动"
+  const FORCE_RUN_KEY = 'cxForceRunOnce';
+  function setForceRunOnce() {
+    try {
+      if (typeof GM_setValue !== 'undefined') GM_setValue(FORCE_RUN_KEY, true);
+      else sessionStorage.setItem(FORCE_RUN_KEY, '1');
+    } catch (e) { /* ignore */ }
+  }
+  function consumeForceRunOnce() {
+    try {
+      if (typeof GM_getValue !== 'undefined') {
+        if (!GM_getValue(FORCE_RUN_KEY, false)) return false;
+        GM_setValue(FORCE_RUN_KEY, false);
+        return true;
+      }
+      if (sessionStorage.getItem(FORCE_RUN_KEY) !== '1') return false;
+      sessionStorage.removeItem(FORCE_RUN_KEY);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function autoStartEnabled() {
+    if (CONFIG.autoStart !== false) { consumeForceRunOnce(); return true; }
+    return consumeForceRunOnce();
+  }
+
+  // 关掉自动开始时的启动态:停在暂停、状态显示「已暂停」,等用户点 ▶
+  function holdAtPausedStart() {
+    PAUSED = true;
+    setStatus('已暂停');
+    log('⏸ 已按设置停在暂停状态(设置里「进入页面自动开始」为关闭),点 ▶ 开始刷课', 'warn');
+  }
+
   function togglePause() {
     PAUSED = !PAUSED;
     if (PAUSED) {
@@ -966,6 +1003,9 @@
       '<div class="cfgHead">⚙ 设置<small>改完记得点右下「保存」</small><button id="cfgClose" type="button" title="关闭">×</button></div>' +
       '<div class="cfgBody">' +
       '<div class="sec">🎬 播放与节奏</div>' +
+      '<div class="field"><div class="row"><div class="label">🚀 进入页面自动开始</div>' +
+        '<input id="cfgAutoStart" type="checkbox" ' + (CONFIG.autoStart !== false ? 'checked' : '') + '></div>' +
+        '<div class="hint">开(默认):一进课程/作业页就自动答题刷课。关:进页面先停在「已暂停」,看完页面确认是这一节再点 ▶ 开始;保存后下次进入页面生效</div></div>' +
       '<div class="field"><div class="row"><div class="label">🎬 视频倍速</div></div>' +
         '<input id="cfgSpeed" type="number" step="0.25" min="1" max="2" value="' + CONFIG.speed + '">' +
         '<div class="hint">默认 2x(最快);1 = 原速最安全,2x 被检测风险最高,自行权衡</div></div>' +
@@ -1065,6 +1105,17 @@
       CONFIG.webAiUrl = document.getElementById('cfgWebAiUrl').value.trim() || 'https://chat.deepseek.com/';
       CONFIG.deliberateErrorRate = (parseFloat(document.getElementById('cfgErrRate').value) || 0) / 100;
       CONFIG.autoSubmit = document.getElementById('cfgSubmit').checked;
+      // 进入页面是否自动开始(下次进入页面生效,不打断当前这一轮)
+      {
+        const asEl = document.getElementById('cfgAutoStart');
+        const prevAuto = CONFIG.autoStart !== false;
+        CONFIG.autoStart = asEl ? asEl.checked : true;
+        if (prevAuto !== CONFIG.autoStart) {
+          log(CONFIG.autoStart
+            ? '🚀 已开启「进入页面自动开始」:下次进页面直接开始刷课'
+            : '🚀 已关闭「进入页面自动开始」:下次进页面会停在暂停状态,点 ▶ 才开始', 'ok');
+        }
+      }
       // 定时关闭:HH:MM,填空 = 不关闭;格式非法则回滚到旧值并提示
       {
         const stopEl = document.getElementById('cfgStopAt');
@@ -4404,10 +4455,32 @@
 
   // 面板点「恢复」时调用:重跑一轮(暂停时循环是中断退出的,URL 没变不会自动触发)
   function resumeWatching() {
-    if (!ACTIVE_ADAPTER || ACTIVE_ADAPTER.id !== 'chaoxing') return;
+    if (!ACTIVE_ADAPTER) return;
+    // 智慧树 / 雨课堂:循环体是 while(!PAUSED),暂停即退出,重跑就是从当前进度继续
+    if (ACTIVE_ADAPTER.id === 'zhihuishu') {
+      try { zhihuishuLoop(); } catch (e) { log('智慧树循环重启失败: ' + e.message, 'err'); }
+      return;
+    }
+    if (ACTIVE_ADAPTER.id === 'yuketang') {
+      try { yuketangLoop(); } catch (e) { log('雨课堂循环重启失败: ' + e.message, 'err'); }
+      return;
+    }
+    if (ACTIVE_ADAPTER.id !== 'chaoxing') return;
     let kind = 'chapter';
     try { kind = ACTIVE_ADAPTER.pageKind ? ACTIVE_ADAPTER.pageKind() : 'chapter'; } catch (e) { /* ignore */ }
+    // 作业页:暂停时 homeworkTask 根本没启动,这里从头跑一遍(不会自动交卷)
+    if (kind === 'homework') {
+      try { homeworkTask(); } catch (e) { if (!runAborted()) log('作业流程启动失败: ' + e.message, 'err'); }
+      return;
+    }
     if (kind !== 'chapter') return;
+    // 旧版章节页:先切 mooc2。跳转会重载页面,这里放行一次自动开始,免得重载后又被停在暂停
+    if (!location.href.includes('mooc2=1')) {
+      log('检测到旧版章节页,正在切换到新版(mooc2)...', 'warn');
+      setForceRunOnce();
+      location.href += (location.href.includes('?') ? '&' : '?') + 'mooc2=1';
+      return;
+    }
     if (running) { pendingRun = true; return; }
     // 先把"当前 URL"记为已处理,再重跑;否则下一轮扫描会把同一个 URL 当成"用户切了页面",
     // 立刻把刚起来的这轮又作废(表现为恢复后视频反复重开)
@@ -4457,11 +4530,13 @@
     },
     snapshotHints: { jobIcon: '.ans-job-icon', quiz: '.TiMu' },
     start() {
+      initPanel();
+      // 关闭「进入页面自动开始」时:面板照常挂出,但业务循环不启动,状态停在「已暂停」
+      if (!autoStartEnabled()) { holdAtPausedStart(); return; }
       if (this.pageKind() === 'homework') {
         homeworkTask();
         return;
       }
-      initPanel();
       if (!location.href.includes('mooc2=1')) {
         log('检测到旧版章节页,正在切换到新版(mooc2)...', 'warn');
         location.href += (location.href.includes('?') ? '&' : '?') + 'mooc2=1';
@@ -4621,6 +4696,8 @@
     },
     start() {
       initPanel();
+      // 关闭「进入页面自动开始」时:只挂面板,循环不启动,状态停在「已暂停」
+      if (!autoStartEnabled()) { holdAtPausedStart(); return; }
       if (this.pageKind() === 'quiz') {
         log('智慧树测验页:实验阶段只支持视频页,测验请用学习通那套流程手动完成', 'warn');
         return;
@@ -4791,6 +4868,8 @@
     },
     start() {
       initPanel();
+      // 关闭「进入页面自动开始」时:只挂面板,循环不启动,状态停在「已暂停」
+      if (!autoStartEnabled()) { holdAtPausedStart(); return; }
       if (this.pageKind() === 'quiz') {
         log('雨课堂测验/习题页:实验阶段未实现自动作答,请手动完成', 'warn');
         return;

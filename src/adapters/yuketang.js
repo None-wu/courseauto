@@ -161,6 +161,8 @@
     },
     start() {
       initPanel();
+      // 关闭「进入页面自动开始」时:只挂面板,循环不启动,状态停在「已暂停」
+      if (!autoStartEnabled()) { holdAtPausedStart(); return; }
       if (this.pageKind() === 'quiz') {
         log('雨课堂测验/习题页:实验阶段未实现自动作答,请手动完成', 'warn');
         return;
