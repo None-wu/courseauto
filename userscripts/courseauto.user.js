@@ -4,7 +4,7 @@
 // @version      1.5.5
 // @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
 // @author       courseauto contributors
-// @license      MIT
+// @license      Personal Use Only (No Commercial Use) — see LICENSE
 // @homepageURL  https://github.com/None-wu/courseauto
 // @supportURL   https://github.com/None-wu/courseauto/issues
 // @updateURL    https://cdn.jsdelivr.net/gh/None-wu/courseauto@main/userscripts/courseauto.user.js

@@ -1,6 +1,6 @@
 # 刷课助手(学习通 / 智慧树 / 雨课堂)
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![License: Personal Use Only](https://img.shields.io/badge/License-Personal%20Use%20Only%20(No%20Commercial)-red.svg)](LICENSE)
 [![Userscript](https://img.shields.io/badge/userscript-Tampermonkey-blue.svg)](userscripts/courseauto.user.js)
 [![Release](https://img.shields.io/github/v/release/None-wu/courseauto?label=release)](https://github.com/None-wu/courseauto/releases/latest)
 [![CI](https://github.com/None-wu/courseauto/actions/workflows/ci.yml/badge.svg)](https://github.com/None-wu/courseauto/actions/workflows/ci.yml)
@@ -10,8 +10,11 @@
 > **零基础可用**:不用写一行代码,装两个东西,填一个 Key,打开课程页就自动干活。
 
 > **来源**:本项目基于 [DaRin1403/xuexitong-autostudy](https://github.com/DaRin1403/xuexitong-autostudy)(MIT)二次开发,
-> 沿用其 MIT 许可与原始版权声明;`.git` 历史中保留了原作者的全部提交记录。在此基础上重构了内核/适配器分层、
+> 上游代码部分沿用其 MIT 许可与原始版权声明(完整保留于 `LICENSE-MIT-upstream`);`.git` 历史中保留了原作者的全部提交记录。在此基础上重构了内核/适配器分层、
 > 补齐了网页 AI 免 Key 答题、判断题与新版页面结构适配、本机安装向导与客户版打包。
+>
+> **许可**:本项目新增与重构部分采用**个人非商业使用许可**,仅限个人学习自用,**禁止任何商业使用**,
+> 详见 [LICENSE](LICENSE)。
 
 ---
 
@@ -387,14 +390,21 @@ npm run test:all    # 10 个套件:学习通主流程/网页AI/测验/新版结�
 
 本项目在开发过程中参考了以下开源项目的思路与接口约定:
 
-- **[DaRin1403/xuexitong-autostudy](https://github.com/DaRin1403/xuexitong-autostudy)** — 上游项目,本仓库在其代码基础上二次开发(MIT)
+- **[DaRin1403/xuexitong-autostudy](https://github.com/DaRin1403/xuexitong-autostudy)** — 上游项目,本仓库在其代码基础上二次开发(上游部分仍为 MIT,见 [`LICENSE-MIT-upstream`](LICENSE-MIT-upstream))
 - [ocsjs(OCS 网课助手)](https://greasyfork.org/cs/scripts/457151)
 - [chaoxing-toolkit](https://github.com/pang-qin/chaoxing-toolkit)
 - [fuckCourse](https://github.com/sheshuyu/fuckCourse) / [Samueli924/chaoxing](https://github.com/Samueli924/chaoxing)
 
 ## 📄 License
 
-[MIT](LICENSE) © courseauto contributors
+**个人非商业使用许可(Personal Use Only, No Commercial Use)** © courseauto contributors
+
+- 允许:个人学习、研究、自用;为自用修改源码;向其他个人无偿分享未修改的原始副本。
+- 禁止:任何商业使用 —— 出售、出租、收费下载/代刷/代挂、付费服务或 SaaS、捆绑进商业产品、
+  企业或机构内部批量使用、以本项目为主要内容变现、去名后分发等。
+- 上游代码部分仍适用原始 MIT 许可,不可撤销,见 [`LICENSE-MIT-upstream`](LICENSE-MIT-upstream)。
+
+完整条款见 [LICENSE](LICENSE)。如需商业授权,请通过仓库 Issue 联系作者取得书面许可。
 
 ---
 

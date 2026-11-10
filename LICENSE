@@ -1,21 +1,134 @@
-MIT License
+courseauto / 刷课助手 个人使用许可 v1.0
+================================================================
 
-Copyright (c) 2025 cx-auto-study contributors
+Copyright (c) 2025-2026 courseauto contributors
+（下称"本项目"、"本软件"）
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+本许可适用于本项目仓库中的全部源代码、脚本、安装包、文档及其衍生作品。
+使用、复制、修改或以任何方式使用本软件之前，请完整阅读本许可。任何使用
+行为均视为已阅读并接受下列全部条款；如不接受，请立即停止使用并删除副本。
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+----------------------------------------------------------------
+1. 授予的权利（仅限个人非商业使用）
+----------------------------------------------------------------
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+在遵守本许可全部条款的前提下，您被授予一项免费、非独占、不可转让、
+可撤销的许可，允许您：
+
+  (a) 以个人学习、研究、自用为目的运行本软件；
+  (b) 为个人自用目的复制本软件；
+  (c) 为个人自用目的修改本软件源代码并自行构建；
+  (d) 在未收取任何费用、未附加任何商业条件的前提下，将未经修改的
+      原始副本无偿分享给其他个人使用者，且必须完整保留本许可与
+      全部版权声明。
+
+上述权利仅限于自然人出于个人、非商业目的行使。
+
+----------------------------------------------------------------
+2. 明确禁止：商业使用
+----------------------------------------------------------------
+
+未经版权人事先书面授权，禁止将本软件及其任何部分、衍生作品、修改版本
+用于任何商业目的。商业使用包括但不限于：
+
+  (a) 出售、出租、许可、转让本软件或以其收费提供下载、安装、部署、
+      代维、代刷、代挂等服务；
+  (b) 将本软件全部或部分嵌入、捆绑于任何商业产品或服务中分发；
+  (c) 以本软件为基础提供付费服务、会员服务、订阅服务或按次计费服务，
+      包括作为 SaaS / 云端服务对外提供；
+  (d) 在经营场所、企业内部或任何生产经营活动中使用（含企业、机构、
+      学校、培训机构等组织的内部批量使用）；
+  (e) 通过广告、流量分成、推广返利、赞助、打赏以外的任何变现手段
+      （含以本软件为主要内容获取平台创作收益）直接或间接获利；
+  (f) 以交付成果换取报酬的项目、外包、投标、教学培训课程等活动中
+      使用或再分发本软件；
+  (g) 去除、隐藏、篡改本软件中的版权声明、许可声明或作者标识后再分发。
+
+----------------------------------------------------------------
+3. 其他限制
+----------------------------------------------------------------
+
+  (a) 不得对本软件进行再许可（sublicense），不得将本许可授予的权利
+      转授、出售或作为独立权利转让给第三方；
+  (b) 不得使用本项目名称、作者名、图标、标识进行商业宣传，或暗示
+      与本项目存在官方合作、认证、背书关系；
+  (c) 您对本软件作出的修改、衍生作品，仍完整受本许可约束，不得以
+      更宽松（含 MIT / Apache / GPL 等）的许可重新发布；
+  (d) 您须自行确保使用本软件的行为符合所在平台的服务条款与当地法律
+      法规；本软件面向课程自动化操作，因使用产生的账号处罚、学业
+      处分、数据损失等风险与后果由使用者自行承担。
+
+----------------------------------------------------------------
+4. 上游代码的许可保留（重要）
+----------------------------------------------------------------
+
+本项目基于上游项目 DaRin1403/xuexitong-autostudy 二次开发。上游部分的
+代码继续适用其原始 MIT 许可，该许可在本项目引入本协议之前即已生效且
+不可撤销，其原始版权与许可声明完整保留于 LICENSE-MIT-upstream 文件，
+不受本许可第 2、3 条约束。
+
+本许可第 2、3 条仅适用于本项目作者新增、重构与修改的部分（含内核/适配器
+分层、面板、本地中转等）。就上游 MIT 部分而言，MIT 许可项下的权利不因
+本协议而缩减；但将上游部分与本项目新增部分合并后的整体作品对外分发时，
+仍应遵守本许可。
+
+----------------------------------------------------------------
+5. 无担保与责任限制
+----------------------------------------------------------------
+
+本软件按"现状"提供，不附带任何明示或默示的担保，包括但不限于对适销性、
+特定用途适用性、不侵权、无错误或不中断运行的担保。
+
+在适用法律允许的最大范围内，作者或版权持有人不对任何索赔、损害或其他
+责任承担责任，无论该责任源于合同、侵权或其他原因，亦无论是否与本软件
+或本软件的使用或其他交易有关。使用本软件的全部风险由您自行承担。
+
+----------------------------------------------------------------
+6. 许可终止
+----------------------------------------------------------------
+
+您一旦违反本许可任何条款，本许可授予的全部权利立即自动终止，无需另行
+通知。终止后，您必须立即停止使用并销毁本软件的全部副本（含修改版本与
+衍生作品）。作者保留就违约或侵权行为追究法律责任的权利。
+
+----------------------------------------------------------------
+7. 其他
+----------------------------------------------------------------
+
+  (a) 本许可不授予任何商标权、商号权或标识使用权；
+  (b) 若本许可任何条款被认定无效或不可执行，其余条款仍然完全有效；
+  (c) 作者保留随时修改后续版本许可条款的权利；已发布的旧版本仍按其
+      发布时附带的许可条款处理；
+  (d) 本许可以中文文本为准。
+
+如需商业授权，请先通过仓库 Issue 联系作者取得书面许可。
+
+================================================================
+English Summary (non-binding, for reference only)
+================================================================
+
+courseauto / Study Helper — Personal Use License v1.0
+
+Permission is granted, free of charge, to use, copy and modify this software
+SOLELY for personal, non-commercial purposes, provided that this license and
+all copyright notices are retained. Redistribution is permitted only in
+unmodified form, at no charge, to individual end users.
+
+COMMERCIAL USE IS STRICTLY PROHIBITED. This includes, without limitation:
+selling, renting, licensing or charging for the software or services based on
+it; bundling it into commercial products; offering it as a paid or ad-supported
+service (including SaaS); use within any business, institution or organized
+production activity; use in paid projects, outsourcing, bidding or training;
+and removing or altering copyright/license notices.
+
+Upstream code from DaRin1403/xuexitong-autostudy remains under its original
+MIT License (see LICENSE-MIT-upstream), which is irrevocable and unaffected by
+the restrictions above; those restrictions apply to the parts added or
+rewritten by this project's authors.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. IN NO EVENT
+SHALL THE AUTHORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING
+FROM THE USE OF THE SOFTWARE.
+
+This license terminates automatically upon any violation. The Chinese text
+above is the authoritative version.
