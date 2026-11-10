@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         刷课助手 · 网页AI桥
 // @namespace    cx-auto-study
-// @version      1.3.1
+// @version      1.3.2
 // @description  配合「刷课助手」使用:接收题目 → 自动填入网页版 AI 输入框 → 发送 → 抓取回答 → 回传。免 API Key。
 // @author       courseauto contributors
 // @license      MIT
@@ -561,6 +561,115 @@
     return lastText;   // 超时也把已有内容返回,判空交给主脚本
   }
 
+  /* ---------- 题目配图:dataURL → 文件 → 塞进 AI 页的输入区 ---------- */
+  // 主脚本只能把图片转成 dataURL 传过来(跨域拿不到 blob),这里还原成 File 再走页面上传。
+  function dataUrlToFile(u, name) {
+    try {
+      const m = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(String(u || ''));
+      if (!m) return null;
+      const mime = m[1] || 'image/png';
+      let bytes;
+      if (m[2]) {
+        const bin = atob(m[3]);
+        bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      } else {
+        const txt = decodeURIComponent(m[3]);
+        bytes = new Uint8Array(txt.length);
+        for (let i = 0; i < txt.length; i++) bytes[i] = txt.charCodeAt(i);
+      }
+      return new File([bytes], name, { type: mime });
+    } catch (e) { return null; }
+  }
+
+  // ① 页面里的 file input(各站「上传/附件」按钮背后都有)→ 直接赋值 files,最通用
+  // ② 没有 file input → 模拟带图片的粘贴事件(部分站的编辑器支持粘贴图片)
+
+  // 挑「最像收图片」的 file input:accept 含 image 或没限制的优先,
+  // 免得不小心把图片塞进"上传文档"的那个 input(传上去会被站点按 PDF 处理而失败)
+  function imageFileInputs() {
+    const all = Array.from(document.querySelectorAll('input[type="file"]'));
+    const score = (el) => {
+      const acc = String(el.getAttribute('accept') || '').toLowerCase();
+      if (!acc) return 2;
+      if (acc.includes('image')) return 3;
+      return 1;
+    };
+    return all.filter((el) => score(el) > 1 || !String(el.getAttribute('accept') || '').trim())
+      .sort((a, b) => score(b) - score(a));
+  }
+
+  // 部分站点(元宝/Kimi/DeepSeek 的部分版本)点「上传图片」才动态插入 file input,
+  // 所以这里补一步:按按钮文案/aria-label/图标名点一下,再回头看有没有 input
+  async function openUploadPicker() {
+    const re = /(上传|附件|图片|照片|文件|attach|upload|image|photo|file|\+)/i;
+    const cands = Array.from(document.querySelectorAll('button, [role="button"], label, a, div[class*="upload"], div[class*="attach"]'))
+      .filter((el) => {
+        if (!visible(el)) return false;
+        const txt = String(el.getAttribute('aria-label') || '') + ' ' + String(el.getAttribute('title') || '') +
+          ' ' + String(el.className || '') + ' ' + String(el.innerText || '').slice(0, 20);
+        if (!re.test(txt)) return false;
+        // 排除发送/停止/新建这类按钮,免得点出别的动作
+        return !/发送|停止|删除|清空|新建|send|stop|clear|delete/i.test(txt);
+      });
+    for (const el of cands.slice(0, 6)) {
+      try {
+        el.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true }));
+        el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        el.click();
+        await sleep(350);
+        if (document.querySelector('input[type="file"]')) return true;
+      } catch (e) { /* 换下一个 */ }
+    }
+    return false;
+  }
+
+  async function attachImages(urls) {
+    const files = (urls || []).map((u, i) => dataUrlToFile(u, 'question-' + (i + 1) + '.png')).filter(Boolean);
+    if (!files.length) return 0;
+    let via = '';
+    let inputs = imageFileInputs();
+    if (!inputs.length) {
+      // 现场没有 file input:试着点开上传入口,再确认
+      await openUploadPicker();
+      inputs = imageFileInputs();
+    }
+    for (const fi of inputs) {
+      try {
+        const dt = new DataTransfer();
+        files.forEach((f) => dt.items.add(f));
+        fi.files = dt.files;
+        fi.dispatchEvent(new Event('input', { bubbles: true }));
+        fi.dispatchEvent(new Event('change', { bubbles: true }));
+        via = 'file-input';
+        break;
+      } catch (e) { /* 换下一个 */ }
+    }
+    if (!via) {
+      const box = findInput();
+      if (box) {
+        try {
+          const dt = new DataTransfer();
+          files.forEach((f) => dt.items.add(f));
+          const ev = new ClipboardEvent('paste', { bubbles: true, cancelable: true });
+          try { Object.defineProperty(ev, 'clipboardData', { value: dt }); } catch (e2) { /* 只读就退化成普通 paste */ }
+          box.dispatchEvent(ev);
+          via = 'paste';
+        } catch (e) { /* ignore */ }
+      }
+    }
+    if (!via) return 0;
+    // 等上传:图片上传是异步的,发得太快会只发出文字。以"页面里图片数量变多"为准,最多等 20s
+    const before = document.querySelectorAll('img, [style*="background-image"]').length;
+    for (let i = 0; i < 50; i++) {
+      await sleep(400);
+      if (document.querySelectorAll('img, [style*="background-image"]').length > before) break;
+    }
+    await sleep(1200);
+    probeReport('题目配图已发送(' + via + ',' + files.length + ' 张)');
+    return files.length;
+  }
+
   async function handleAsk(msg) {
     // SPA 页面可能还没挂载完输入框:最多等 8s 再报"没找到"
     let input = null;
@@ -569,6 +678,12 @@
 
     const baseline = replyNodes().length;
     const chatBox = findChatContainer();
+    // 图片题:先把配图传上去,再填文字 —— 反过来的话页面会把图片当成新消息单独发出去
+    if (Array.isArray(msg.images) && msg.images.length) {
+      const n = await attachImages(msg.images);
+      if (!n) probeReport('题目配图没能上传(页面无 file input 且 paste 无效),本题只能凭文字作答');
+      await sleep(300);
+    }
     fillInput(input, msg.text);
     await sleep(120);
     const filled = String(input.value || input.innerText || '').trim();
@@ -727,7 +842,7 @@
       if (o && o.item && o.item.cxId) {
         const item = o.item;
         try {
-          const text = await handleAsk({ text: item.text, expect: item.expect, timeout: item.timeout });
+          const text = await handleAsk({ text: item.text, expect: item.expect, timeout: item.timeout, images: item.images });
           await xfetch(RELAY + '/api/webai/answer', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },

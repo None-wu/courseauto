@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         刷课助手(学习通/智慧树/雨课堂)
 // @namespace    cx-auto-study
-// @version      1.5.2
+// @version      1.5.4
 // @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
 // @author       courseauto contributors
 // @license      MIT
@@ -24,6 +24,10 @@
 // @connect      api.muketool.com
 // @connect      api.deepseek.com
 // @connect      cdn.jsdelivr.net
+// 题目图片散落在各站资源域(p.ananas.chaoxing.com / 智树图床 / 雨课堂 CDN 等),
+// 域名多且会变,图片题要"看图作答"就必须能用油猴跨域把图抓成 dataURL。
+// 只影响图片下载这一条链路;不需要图片功能时把配置 aiVision 关掉即可。
+// @connect      *
 // @noframes
 // ==/UserScript==
 //
@@ -85,6 +89,7 @@
     webAiUrl: 'https://chat.deepseek.com/',  // 网页 AI 地址
     webAiRelay: 'http://127.0.0.1:8790',     // 本地中转服务(桥脚本经此收题,AI 页手动打开即可)
     webAiTimeout: 60,       // 等网页 AI 回复的超时(秒)
+    aiVision: true,         // 图片题:把题干里的图片抽出来随题发送(AI 才能"看图作答")
   };
 
   function loadConfig() {
@@ -351,6 +356,216 @@
         fetch(url, { method, headers, body: data }).then((r) => r.text()).then(resolve).catch(reject);
       }
     });
+  }
+  /* ==================== 题目图片(视觉题) ==================== */
+  // 学习通/智慧树里不少题的题干、选项本身就是图片(公式、电路图、代码截图),
+  // 页面里只有一个 <img src>。老逻辑只把题干当文字取,图片标签要么被 clean 掉、
+  // 要么原样丢给 AI —— AI 看到的是一串地址,自然答不出。这里做三件事:
+  //   ① 把 <img> 抽出来,用 [图片N] 占位留在题干里(文字链路不丢信息)
+  //   ② 把图片本体转成 dataURL(带缓存、限张数、限体积)
+  //   ③ 两条送图通道:API 通道走 OpenAI 兼容的 image_url 多模态;
+  //      网页 AI 通道把图片当附件粘贴/上传到输入框(由「网页AI桥」执行)
+
+  const IMG_MAX_COUNT = 3;              // 单题最多送几张(再多容易超时/AI 看花眼)
+  const IMG_MAX_SIDE = 1400;            // 长边超过这个就先缩(视觉模型内部也会缩,提前缩省带宽)
+  const IMG_MAX_CHARS = 700 * 1024;     // 单张 dataURL 字符上限(约 512KB 二进制)
+  const IMG_HARD_CHARS = 1100 * 1024;   // 缩过还是超大就放弃,不让整个请求卡住
+  const IMG_CACHE = new Map();          // src -> dataURL('' 表示抓取失败,不再重复试)
+  let imgWarned = false;
+
+  // 从一段 HTML 里抽图片地址(含懒加载 data-src / 背景图写法)
+  function imgSrcsOfHtml(html) {
+    const out = [];
+    const s = String(html || '');
+    if (!s) return out;
+    let m;
+    const re = /<img[^>]+(?:src|data-src|data-original)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi;
+    while ((m = re.exec(s)) !== null) {
+      const url = String(m[1] || m[2] || m[3] || '').trim();
+      if (url && !/^about:blank$/i.test(url) && !/^data:image\/gif/i.test(url)) out.push(url);
+    }
+    const bg = /background(?:-image)?\s*:\s*url\(\s*['"]?([^'")]+)['"]?\s*\)/gi;
+    while ((m = bg.exec(s)) !== null) {
+      const url = String(m[1] || '').trim();
+      if (url && !/^about:blank$/i.test(url)) out.push(url);
+    }
+    return out;
+  }
+
+  // 容器内所有题面图片(题干区+选项区)。滤掉 1x1 跟踪图与小图标(勾/叉/播放键这类)
+  function pickImagesIn(el) {
+    const out = [];
+    if (!el || !el.querySelectorAll) return out;
+    try {
+      el.querySelectorAll('img').forEach((im) => {
+        const src = String(im.getAttribute('src') || im.getAttribute('data-src') ||
+          im.getAttribute('data-original') || '').trim();
+        if (!src || /^about:blank$/i.test(src) || /^data:image\/gif/i.test(src)) return;
+        const w = im.naturalWidth || im.width || 0;
+        const h = im.naturalHeight || im.height || 0;
+        if (w && h && w <= 24 && h <= 24) return;
+        if (!out.includes(src)) out.push(src);
+      });
+    } catch (e) { /* ignore */ }
+    return out;
+  }
+
+  // 一行 HTML 里的 <img> 换成 [图片N],sink 按出现顺序收集 src(占位号 = sink 下标 + 1)
+  function replaceImgTags(html, sink) {
+    return String(html || '').replace(/<img\b[^>]*>/gi, (tag) => {
+      const src = imgSrcsOfHtml(tag)[0] || '';
+      if (!src) return '';
+      if (!sink.includes(src)) sink.push(src);
+      return `[图片${sink.indexOf(src) + 1}]`;
+    });
+  }
+
+  // 题干/选项:抽图片 + 留占位。返回去重后的图片地址列表(q.imgSrc)
+  function markQuestionImages(q) {
+    if (!q) return 0;
+    if (q.__imgMarked) return (q.imgSrc || []).length;
+    const sink = [];
+    q.question = clean(replaceImgTags(q.question, sink));
+    if (Array.isArray(q.options)) q.options = q.options.map((o) => clean(replaceImgTags(o, sink)));
+    // 适配器已经把容器内图片地址一并带过来(titleImg),合并去重后统一按顺序编号
+    (q.titleImg || []).forEach((s) => { if (s && !sink.includes(s)) sink.push(s); });
+    q.imgSrc = sink;
+    q.__imgMarked = true;
+    return sink.length;
+  }
+
+  // 题干是否含图片(整卷模式要把这些题剔出来单独带图问)
+  function questionHasImage(q) {
+    if (!q) return false;
+    if (q.images && q.images.length) return true;
+    if (q.imgSrc && q.imgSrc.length) return true;
+    if (/<img\b/i.test(String(q.question || ''))) return true;
+    if (Array.isArray(q.options) && q.options.some((o) => /<img\b/i.test(String(o || '')))) return true;
+    if (q.titleImg && q.titleImg.length) return true;
+    return false;
+  }
+
+  function blobToDataUrl(blob) {
+    return new Promise((resolve) => {
+      try {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result || ''));
+        fr.onerror = () => resolve('');
+        fr.readAsDataURL(blob);
+      } catch (e) { resolve(''); }
+    });
+  }
+
+  // 油猴跨域取二进制:GM_xmlhttpRequest 不受同源限制(@connect 需放行图片域名)
+  function gmLoadBlob(url) {
+    if (typeof GM_xmlhttpRequest === 'undefined') return Promise.resolve(null);
+    return new Promise((resolve) => {
+      let settled = false;
+      const fin = (v) => { if (!settled) { settled = true; resolve(v); } };
+      try {
+        GM_xmlhttpRequest({
+          method: 'GET',
+          url,
+          responseType: 'blob',
+          timeout: 15000,
+          onload: (r) => fin(r && r.response instanceof Blob ? r.response : null),
+          onerror: () => fin(null),
+          ontimeout: () => fin(null)
+        });
+      } catch (e) { fin(null); }
+    });
+  }
+
+  // 缩小重编码:长边超过 maxSide 才处理;透明 PNG 转 JPEG 前先铺白底(否则透明区变黑)
+  function shrinkDataUrl(dataUrl, maxSide) {
+    return new Promise((resolve) => {
+      try {
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const w = img.naturalWidth || img.width;
+            const h = img.naturalHeight || img.height;
+            if (!w || !h) { resolve(dataUrl); return; }
+            const scale = Math.min(1, maxSide / Math.max(w, h));
+            if (scale >= 1 && dataUrl.length <= IMG_MAX_CHARS) { resolve(dataUrl); return; }
+            const cv = document.createElement('canvas');
+            cv.width = Math.max(1, Math.round(w * scale));
+            cv.height = Math.max(1, Math.round(h * scale));
+            const ctx = cv.getContext('2d');
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, cv.width, cv.height);
+            ctx.drawImage(img, 0, 0, cv.width, cv.height);
+            resolve(cv.toDataURL('image/jpeg', 0.85));
+          } catch (e) { resolve(dataUrl); }
+        };
+        img.onerror = () => resolve(dataUrl);
+        img.src = dataUrl;
+      } catch (e) { resolve(dataUrl); }
+    });
+  }
+
+  async function imgToDataUrl(src) {
+    const s = String(src || '');
+    if (!s) return '';
+    if (IMG_CACHE.has(s)) return IMG_CACHE.get(s);
+    let dataUrl = /^data:image\//i.test(s) ? s : '';
+    if (!dataUrl) {
+      const blob = await gmLoadBlob(s);
+      if (blob) dataUrl = await blobToDataUrl(blob);
+    }
+    if (!dataUrl) {
+      // 没有 GM 权限或 GM 被挡(普通 fetch + 同源 cookie)
+      try {
+        const r = await fetch(s, { credentials: 'include' });
+        if (r && r.ok) dataUrl = await blobToDataUrl(await r.blob());
+      } catch (e) { /* 跨域/防盗链,继续 canvas 兜底 */ }
+    }
+    if (!dataUrl) {
+      // 页面里已经画出来的图:用 canvas 取像素(需要图片本身允许跨域,否则 taint 失败)
+      dataUrl = await new Promise((resolve) => {
+        try {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          img.onload = () => {
+            try {
+              const cv = document.createElement('canvas');
+              cv.width = img.naturalWidth || img.width;
+              cv.height = img.naturalHeight || img.height;
+              cv.getContext('2d').drawImage(img, 0, 0);
+              resolve(cv.toDataURL('image/png'));
+            } catch (e) { resolve(''); }
+          };
+          img.onerror = () => resolve('');
+          img.src = s;
+        } catch (e) { resolve(''); }
+      });
+    }
+    if (dataUrl && dataUrl.length > IMG_MAX_CHARS) dataUrl = await shrinkDataUrl(dataUrl, IMG_MAX_SIDE);
+    if (dataUrl && dataUrl.length > IMG_HARD_CHARS) dataUrl = '';   // 太大宁可只发文字
+    IMG_CACHE.set(s, dataUrl);
+    return dataUrl;
+  }
+
+  // 收集题目图片并转 dataURL。结果写进 q.images(已处理过就直接返回,不重复下载)
+  async function ensureQuestionImages(q) {
+    if (!q) return [];
+    if (Array.isArray(q.images)) return q.images;
+    q.images = [];
+    if (CONFIG.aiVision === false) return q.images;      // 用户关了「图片题看原图」
+    const total = markQuestionImages(q);
+    if (!total) return q.images;
+    const list = (q.imgSrc || []).slice(0, IMG_MAX_COUNT);
+    for (const src of list) {
+      const d = await imgToDataUrl(src);
+      if (d) q.images.push(d);
+    }
+    if (q.images.length) {
+      log(`🖼 这道题含 ${total} 张图片,已随题发送给 AI(${q.images.length} 张)`, 'ok');
+    } else if (!imgWarned) {
+      imgWarned = true;
+      log('🖼 题目图片抓取失败(需要登录态/防盗链/跨域):题干里保留 [图片N] 占位,AI 只能凭文字作答', 'warn');
+    }
+    return q.images;
   }
   /* ==================== 日志面板 ==================== */
   let logPanel = null;
@@ -767,7 +982,10 @@
         '<div class="hint">支持 DeepSeek / 腾讯元宝 / Kimi / 豆包 / ChatGPT / 通义(qwen) / 智谱清言(chatglm) 的网页版。换站点改这里的地址即可(桥脚本 @match 已全部覆盖,无需重装桥);必须先在该网站登录,标签页保持打开</div></div>' +
       '<div class="field"><div class="row"><div class="label">📦 整卷模式(推荐)</div>' +
         '<input id="cfgWebAiBatch" type="checkbox" ' + (CONFIG.webAiBatch ? 'checked' : '') + '></div>' +
-        '<div class="hint">开启后把整页题目一次性发给网页 AI、按题号批量回答再自动填写(1 次对话答完所有题,更快、不易触发限流);关闭则逐题询问。缺漏的题会自动回退逐题询问</div></div>' +
+        '<div class="hint">开启后把整页题目一次性发给网页 AI、按题号批量回答再自动填写(1 次对话答完所有题,更快、不易触发限流);关闭则逐题询问。缺漏的题会自动回退逐题询问。含图片的题会单独带图逐题问(整批发文字时 AI 看不到图)</div></div>' +
+      '<div class="field"><div class="row"><div class="label">🖼 图片题看原图</div>' +
+        '<input id="cfgVision" type="checkbox" ' + (CONFIG.aiVision === false ? '' : 'checked') + '></div>' +
+        '<div class="hint">题干/选项是图片(公式、电路图、代码截图)时,把图片本体一起发给 AI,而不是只发一串图片地址。网页 AI 走附件上传(需桥 1.3.2+),API 走多模态。抓图失败会在题干里保留 [图片N] 占位</div></div>' +
       '<div class="sec">🤖 AI 答题 · API 方式</div>' +
       '<div class="field"><div class="row"><div class="label">🤖 启用 AI 答题</div>' +
         '<input id="cfgAI" type="checkbox" ' + (CONFIG.aiEnabled ? 'checked' : '') + '></div>' +
@@ -840,6 +1058,10 @@
       CONFIG.aiUrl = document.getElementById('cfgAIUrl').value.trim() || 'https://api.deepseek.com/v1/chat/completions';
       CONFIG.webAiEnabled = document.getElementById('cfgWebAI').checked;
       CONFIG.webAiBatch = document.getElementById('cfgWebAiBatch').checked;
+      {
+        const vEl = document.getElementById('cfgVision');
+        if (vEl) CONFIG.aiVision = vEl.checked;
+      }
       CONFIG.webAiUrl = document.getElementById('cfgWebAiUrl').value.trim() || 'https://chat.deepseek.com/';
       CONFIG.deliberateErrorRate = (parseFloat(document.getElementById('cfgErrRate').value) || 0) / 100;
       CONFIG.autoSubmit = document.getElementById('cfgSubmit').checked;
@@ -1017,7 +1239,8 @@
   let aiFailCount = 0;
   let aiCooldownUntil = 0;
   let aiCooldownWarned = false;
-  function channelAI(q, hint) {
+  // noImg:内部重试用。接口明确拒绝图片(400/413/415/422)时,去掉图片用纯文字再问一次
+  function channelAI(q, hint, noImg) {
     return new Promise((resolve) => {
       if (Date.now() < aiCooldownUntil) {
         if (!aiCooldownWarned) {
@@ -1028,11 +1251,18 @@
         return;
       }
       const prompt = hint ? buildAIPrompt(q) + `\n\n注意:${hint}` : buildAIPrompt(q);
+      // 图片题:OpenAI 兼容协议的多模态写法(纯文本 part + image_url part)。
+      // 老逻辑只发字符串,题干里的图片等于被扔掉,AI 只能靠 [图片N] 占位瞎猜。
+      const imgs = noImg ? [] : (q.images || []).filter(Boolean);
+      const userContent = imgs.length
+        ? [{ type: 'text', text: prompt + `\n\n本题的题目图片已作为附件放在这条消息里(共 ${imgs.length} 张),请直接看图作答。` }]
+          .concat(imgs.map((u) => ({ type: 'image_url', image_url: { url: u } })))
+        : prompt;
       const data = JSON.stringify({
         model: CONFIG.aiModel,
         messages: [
           { role: 'system', content: '你是答题助手。回复的第一个字符必须是最终答案,严禁输出思考过程、解释、重复题目或任何多余内容。' },
-          { role: 'user', content: prompt }
+          { role: 'user', content: userContent }
         ],
         temperature: 0.1,
         max_tokens: 300
@@ -1063,6 +1293,12 @@
         onload: (res) => {
           try {
             if (res.status !== 200) {
+              // 接口不认图片(模型没视觉能力/平台未开放/图片过大)→ 去掉图片重问,别让整题失败
+              if (imgs.length && [400, 413, 415, 422].includes(res.status)) {
+                log('⚠ AI 接口不接受图片(当前模型可能不支持视觉),去掉图片用文字题干重问', 'warn');
+                channelAI(q, hint, true).then(resolve);
+                return;
+              }
               done([], `HTTP ${res.status}: ${String(res.responseText).slice(0, 180)}`);
               return;
             }
@@ -1085,15 +1321,31 @@
     });
   }
 
+  // 图片题追加说明:①占位与附件一一对应 ②题干/选项本身全是图时明确要求"读图当题面"
+  function imgTailOf(q) {
+    const n = (q.images && q.images.length) || 0;
+    if (!n) return '';
+    const strip = (s) => String(s || '').replace(/\[图片\d+\]/g, '').replace(/[\s:：,，。.、;；()（）]/g, '');
+    // 去掉 [图片N] 后没有实质文字 = 这块内容本身就是图,AI 必须自己看图
+    const qBare = strip(q.question);
+    const oBare = (q.options || []).map(strip).join('');
+    const extra = [];
+    if (!qBare) extra.push('题干内容全部在图里,图片就是题面本身,请直接从图中读取题目后再作答');
+    if ((q.options || []).length && !oBare) extra.push('选项内容也都在图里,请先从图中读出各选项文字,再回答对应的选项字母');
+    extra.push(`占位 [图片1]~[图片${n}] 与附件顺序一一对应`);
+    return `\n(本题共 ${n} 张配图,已作为附件随本条消息发送,请先看图再作答;${extra.join(';')})`;
+  }
+
   function buildAIPrompt(q) {
     const opts = (q.options || []).map((o, i) => `${String.fromCharCode(65 + i)}.${o}`).join(' ');
     const base = '你是一位专业的学习辅导老师,知识面广。规则:你的回复必须以最终答案开头(第一个字符就是答案),只输出答案本身,不要任何解释、思考或多余文字。';
+    const tail = imgTailOf(q);
     switch (String(q.type)) {
-      case '3': return `${base}\n判断题。题目:${q.question}\n只输出"正确"或"错误"。`;
-      case '1': return `${base}\n多选题。题目:${q.question}\n选项:${opts}\n只输出所有正确选项的字母组合(如 ABD)。`;
-      case '2': return `${base}\n填空题。题目:${q.question}\n直接输出答案,多个空用 | 分隔。`;
-      case '0': return `${base}\n单选题。题目:${q.question}\n选项:${opts}\n只输出正确选项的字母(如 C)。`;
-      default: return `${base}\n简答题。题目:${q.question}\n输出完整答案:若题目要求字数(例如"不少于800字""800字以上"),必须写够该字数;直接给正文,不要"以下是""简答如下"之类的开场白,也不要写提纲。`;
+      case '3': return `${base}\n判断题。题目:${q.question}\n只输出"正确"或"错误"。${tail}`;
+      case '1': return `${base}\n多选题。题目:${q.question}\n选项:${opts}\n只输出所有正确选项的字母组合(如 ABD)。${tail}`;
+      case '2': return `${base}\n填空题。题目:${q.question}\n直接输出答案,多个空用 | 分隔。${tail}`;
+      case '0': return `${base}\n单选题。题目:${q.question}\n选项:${opts}\n只输出正确选项的字母(如 C)。${tail}`;
+      default: return `${base}\n简答题。题目:${q.question}\n输出完整答案:若题目要求字数(例如"不少于800字""800字以上"),必须写够该字数;直接给正文,不要"以下是""简答如下"之类的开场白,也不要写提纲。${tail}`;
     }
   }
 
@@ -1200,11 +1452,14 @@
       opts ? `选项:\n${opts}` : '',
       '',
       '答案格式:单选题写字母(如 C);多选题写字母组合(如 ABD);判断题写「正确」或「错误」;填空题多个空用 | 分隔。',
+      imgTailOf(q),
       hint ? `\n注意:${hint}` : ''
     ].filter(Boolean).join('\n');
   }
 
-  async function askWebAI(text, timeoutMs, expect) {
+  // images:题目图片(dataURL 数组),由桥脚本负责把它们当附件塞进 AI 输入框
+  async function askWebAI(text, timeoutMs, expect, images) {
+    const imgs = Array.isArray(images) ? images.filter(Boolean).slice(0, IMG_MAX_COUNT) : [];
     // 先验桥:目标 AI 站的桥不在线时跳过 postMessage 直连(握手状态可能是旧窗口残留,会白等 60s),
     // 直接走中转通道的快速失败 + 指引
     let site = '';
@@ -1218,22 +1473,23 @@
         win = openWebAI();
         if (win) {
           await waitWebAiReady(8000);
-          if (webAiReady) return postMessageAsk(win, text, timeoutMs, expect);
+          if (webAiReady) return postMessageAsk(win, text, timeoutMs, expect, imgs);
         }
       } else {
         await waitWebAiReady(8000);
-        if (webAiReady) return postMessageAsk(win, text, timeoutMs, expect);
+        if (webAiReady) return postMessageAsk(win, text, timeoutMs, expect, imgs);
       }
     }
     // 通道二:经本地服务中转 —— 不依赖弹窗,用户手动打开的 AI 页也能接题(内含不在线快速失败)
-    const relay = await relayAsk(text, timeoutMs, expect);
+    const relay = await relayAsk(text, timeoutMs, expect, imgs);
     if (relay.ok) return relay.result;
     return { text: '', error: '连不上网页 AI:请点 ⚙ →「打开并连接网页 AI」,或手动打开网页 AI 地址并保持页面开着' };
   }
 
   // postMessage 直连实现(原 askWebAI 主体)
-  function postMessageAsk(win, text, timeoutMs, expect) {
+  function postMessageAsk(win, text, timeoutMs, expect, imgs) {
     const cxId = 'cx' + Date.now().toString(36) + (++webAiSeq);
+    const images = Array.isArray(imgs) ? imgs : [];
     const base = (CONFIG.webAiRelay || 'http://127.0.0.1:8790').replace(/\/$/, '');
     return new Promise((resolve) => {
       let done = false;
@@ -1266,7 +1522,7 @@
       }, 2500);
       const timer = setTimeout(() => finish({ text: '', error: `等待网页 AI 回复超时(${Math.round(timeoutMs / 1000)}s)` }), timeoutMs);
       window.addEventListener('message', onMsg);
-      try { win.postMessage({ cxType: 'CX_ASK', cxId, text, expect: expect || 0, timeout: timeoutMs }, webAiOrigin()); }
+      try { win.postMessage({ cxType: 'CX_ASK', cxId, text, expect: expect || 0, timeout: timeoutMs, images }, webAiOrigin()); }
       catch (e) { finish({ text: '', error: '消息发送失败: ' + (e.message || e) }); }
     });
   }
@@ -1291,8 +1547,9 @@
     catch (e) { return false; }
   }
 
-  async function relayAsk(text, timeoutMs, expect) {
+  async function relayAsk(text, timeoutMs, expect, imgs) {
     const base = (CONFIG.webAiRelay || 'http://127.0.0.1:8790').replace(/\/$/, '');
+    const images = Array.isArray(imgs) ? imgs : [];
     let site = '';
     try { site = new URL(CONFIG.webAiUrl).host; } catch (e) { /* ignore */ }
     // 先验桥:AI 页的桥不在线就别把题扔进队列干等 60s,快速失败并给可执行指引
@@ -1325,7 +1582,7 @@
     try {
       await cxFetch(base + '/api/webai/ask', {
         method: 'POST',
-        data: JSON.stringify({ cxId, text, href: location.href, site, expect: expect || 0, timeout: timeoutMs }),
+        data: JSON.stringify({ cxId, text, href: location.href, site, expect: expect || 0, timeout: timeoutMs, images }),
         headers: { 'Content-Type': 'application/json' },
         timeout: 8000
       });
@@ -1364,7 +1621,8 @@
 
   async function channelWebAI(q, hint) {
     const timeout = (CONFIG.webAiTimeout || 60) * 1000;
-    const r = await askWebAI(buildAskText(q, hint), timeout);
+    // 第 4 参把题目配图(dataURL)一起带过去:桥会把它当附件传进 AI 输入框
+    const r = await askWebAI(buildAskText(q, hint), timeout, 0, q.images);
     if (r.error) { log('网页 AI: ' + r.error, 'warn'); return { form: '网页AI', answer: [] }; }
     const raw = String(r.text || '').trim();
     if (!raw) { log('网页 AI 返回内容为空', 'warn'); return { form: '网页AI', answer: [] }; }
@@ -1428,27 +1686,45 @@
 
   async function askBatchWebAI(tasks) {
     if (!tasks.length) return null;
-    const first = await askBatchOnce(tasks, '');
-    const out = first ? first.slice() : new Array(tasks.length).fill(null);
-    let got = out.filter(Boolean).length;
-    log(`📦 整卷回复解析: ${got}/${tasks.length} 题拿到答案`, got === tasks.length ? 'ok' : 'warn');
-    if (got === tasks.length) return out;
-    // 缺题不立刻逐题问(那会变成"一个一个发"),先把缺的题再整批问一次
-    const missIdx = out.map((v, i) => (v ? -1 : i)).filter((i) => i >= 0);
-    if (missIdx.length && missIdx.length < tasks.length && CONFIG.webAiBatchRetry !== false) {
-      log(`📦 补问:${missIdx.length} 道题没解析到,再整批问一次(不逐题)...`, 'warn');
-      const sub = await askBatchOnce(missIdx.map((i) => tasks[i]), '(补问)');
-      if (sub) sub.forEach((v, k) => { if (v && !out[missIdx[k]]) out[missIdx[k]] = v; });
-      got = out.filter(Boolean).length;
-      log(`📦 补问后: ${got}/${tasks.length} 题拿到答案`, got === tasks.length ? 'ok' : 'warn');
+    const out = new Array(tasks.length).fill(null);
+    // 图片题必须从整批里剔出去:整卷只是一段文字,AI 收到的题干里只有 [图片N] 占位,
+    // 图片本身不会跟过去 —— 单题通道才会把配图当附件上传。
+    const imgIdx = [];
+    tasks.forEach((t, i) => { if (t && t.q && questionHasImage(t.q)) imgIdx.push(i); });
+    if (imgIdx.length) {
+      log(`🖼 整卷里有 ${imgIdx.length} 道图片题,单独带图逐题问;其余 ${tasks.length - imgIdx.length} 道仍走整批`, 'info');
+      for (const i of imgIdx) {
+        const a = await getAnswers(tasks[i].q);
+        if (a && a.length) out[i] = a;
+      }
     }
-    if (got < tasks.length) log(`⚠ 仍有 ${tasks.length - got} 道题没答案,只有这几道会逐题回退询问`, 'warn');
-    return got ? out : null;
+    const restIdx = tasks.map((t, i) => (imgIdx.indexOf(i) >= 0 ? -1 : i)).filter((i) => i >= 0);
+    if (restIdx.length) {
+      const first = await askBatchOnce(restIdx.map((i) => tasks[i]), '');
+      if (first) first.forEach((v, k) => { if (v) out[restIdx[k]] = v; });
+      let got = out.filter(Boolean).length;
+      log(`📦 整卷回复解析: ${got}/${tasks.length} 题拿到答案`, got === tasks.length ? 'ok' : 'warn');
+      if (got < tasks.length) {
+        // 补问只补"文字题里还缺的":图片题已经在上面单独问过,再混进整批也看不到图
+        const missIdx = out.map((v, i) => (v || imgIdx.indexOf(i) >= 0 ? -1 : i)).filter((i) => i >= 0);
+        if (missIdx.length && missIdx.length < restIdx.length && CONFIG.webAiBatchRetry !== false) {
+          log(`📦 补问:${missIdx.length} 道题没解析到,再整批问一次(不逐题)...`, 'warn');
+          const sub = await askBatchOnce(missIdx.map((i) => tasks[i]), '(补问)');
+          if (sub) sub.forEach((v, k) => { if (v && !out[missIdx[k]]) out[missIdx[k]] = v; });
+          got = out.filter(Boolean).length;
+          log(`📦 补问后: ${got}/${tasks.length} 题拿到答案`, got === tasks.length ? 'ok' : 'warn');
+        }
+        if (got < tasks.length) log(`⚠ 仍有 ${tasks.length - got} 道题没答案,只有这几道会逐题回退询问`, 'warn');
+      }
+    }
+    return out.some(Boolean) ? out : null;
   }
 
   let aiKeyWarned = false;
   // hint:可选,错题重问时把"上次判错的答案"带进去让 AI 换思路
   async function getAnswers(q, hint) {
+    // 图片题先把配图抓成 dataURL(带缓存):后面 API 多模态与网页 AI 附件都要用它
+    if (q) await ensureQuestionImages(q);
     // 错题本优先:之前被判错、随后重问 AI 或从结果页取到正确答案的题,重做时直接用修正答案
     if (!hint) {
       const fixed = lookupFix(q.question);
@@ -1842,12 +2118,23 @@
     return '0';
   }
 
+  // 题干/选项里的图片地址单独带一份:题干一旦被 clean 成文本,懒加载图或
+  // 不在题干容器里的配图就找不回来了(图片题全靠它送图给 AI)
+  function withImgs(el, q) {
+    if (!q) return q;
+    try {
+      const imgs = pickImagesIn(el);
+      if (imgs.length) q.titleImg = imgs;
+    } catch (e) { /* ignore */ }
+    return q;
+  }
+
   function extractQuizQuestion(el) {
     try {
       const text = applyDecryptText(cl(clean(pickTitleHtml(el))));
       if (!text) return null;
       const options = pickOptions(el).map(applyDecryptText);
-      return { question: text, options, type: inferType(el, options) };
+      return withImgs(el, { question: text, options, type: inferType(el, options) });
     } catch (e) { return null; }
   }
   // 作业页(.questionLi 容器)
@@ -1862,7 +2149,7 @@
       text = applyDecryptText(text);
       if (!text) return null;
       const options = pickOptions(el).map(applyDecryptText);
-      return { question: text, options, type: inferType(el, options) };
+      return withImgs(el, { question: text, options, type: inferType(el, options) });
     } catch (e) { return null; }
   }
 
@@ -2753,7 +3040,7 @@
       for (const o of opts) text = text.split(o).join('');
       text = cl(clean(text)).replace(/[（(]\s*[)）]\s*$/, '').slice(0, 300);
       if (!text) return null;
-      return { question: text, options: opts, type };
+      return withImgs(el, { question: text, options: opts, type });
     } catch (e) { return null; }
   }
 

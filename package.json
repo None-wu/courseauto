@@ -1,6 +1,6 @@
 {
   "name": "courseauto",
-  "version": "1.5.2",
+  "version": "1.5.4",
   "private": true,
   "type": "module",
   "description": "刷课助手:学习通/智慧树/雨课堂三平台油猴脚本(内核 + 适配层) + 本机安装向导 / 网页 AI 中转 + 单文件 exe 打包 + 端到端沙箱",
@@ -47,6 +47,8 @@
     "test:newver": "npm --prefix extras/tests run test:newver",
     "test:pause": "npm --prefix extras/tests run test:pause",
     "test:relay": "npm --prefix extras/tests run test:relay",
-    "test:ds": "npm --prefix extras/tests run test:ds"
+    "test:ds": "npm --prefix extras/tests run test:ds",
+    "test:image": "npm --prefix extras/tests run test:image",
+    "test:image-quiz": "npm --prefix extras/tests run test:image-quiz"
   }
 }

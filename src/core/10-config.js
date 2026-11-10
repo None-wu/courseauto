@@ -28,6 +28,7 @@
     webAiUrl: 'https://chat.deepseek.com/',  // 网页 AI 地址
     webAiRelay: 'http://127.0.0.1:8790',     // 本地中转服务(桥脚本经此收题,AI 页手动打开即可)
     webAiTimeout: 60,       // 等网页 AI 回复的超时(秒)
+    aiVision: true,         // 图片题:把题干里的图片抽出来随题发送(AI 才能"看图作答")
   };
 
   function loadConfig() {

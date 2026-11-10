@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>mooc2/work/dowork(题干为图片,模拟)</title>
+<style>
+  body { margin: 0; padding: 12px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #333; background: #fff; }
+  .questionLi { border: 1px solid #e5e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .mark_name { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  .mark_name img { display: block; max-width: 240px; margin-top: 6px; border: 1px solid #dfe3ee; }
+  .colorShallow { color: #8a90a2; font-weight: 400; }
+  ul { list-style: none; padding: 0; margin: 6px 0 0; }
+  li { padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
+  li:hover { background: #f3f7ff; }
+  .num_option { color: #8a90a2; margin-right: 4px; }
+  textarea { width: 100%; box-sizing: border-box; height: 54px; border: 1px solid #dfe3ee; border-radius: 6px; padding: 6px; }
+  #bar { margin-top: 8px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h3>第 1 章 · 章节测验（题干/选项是图片：真实场景里题干只有 &lt;img&gt;，复制出来只是一串地址）</h3>
+<div id="list"></div>
+<div id="bar">未提交</div>
+<script>
+  // 240x140 图片(左蓝右黄),直接内联成 dataURL:不依赖网络,确保能吃进 canvas/GM 抓取
+  var PIC = 'iVBORw0KGgoAAAANSUhEUgAAAPAAAACMCAIAAADN17N/AAABn0lEQVR42u3SMREAMAgEMHZ0VFl91SBzd1z8lLtISJ07BPzXBJRqQguN0EILjdBCI7TQQiO00AgttNAILTRCCy00QguN0EILjdBCI7TQQiO00AgttNAILTRCCy00QguN0EILjdBCI7TQQiO00AgttNAILTRCCy00QguN0EILjdBCI7TQQiO00KgmtNAILbTQCC00QgstNEILjdBCC43QQiO00EIjtNAILbTQCC00QgstNEILjdBCC43QQiO00EIjtNAILbTQCC00QgstNEILjdBCC43QQiO00EIjtNAILbTQCC00QgstNEILjdBCC43QQguN0EIjtNBCI7TQCC200AgtNEILLTRCC43QQguN0EIjtNBCI7TQCC200AgtNEILLTRCC43QQguN0EIjtNBCI7TQCC200AgtNEILLTRCC43QQguN0EIjtNBCI7TQCC200AgttNC2CS00QgstNEILjdBCC43QQiO00EIjtNAILbTQCC00QgstNEILjdBCC43QQiO00EIjtNAILbTQCC00QgstNEILjdBCC43QQiN03gJE7Edo90RQ7QAAAABJRU5ErkJggg==';
+  var IMG = 'data:image/png;base64,' + PIC;
+
+  // id0:题干既有文字又有图(最常见的图片题)
+  // id1:题干纯图片,一个字都没有(复制出来只剩一堆乱码地址)
+  var QS = [
+    { id: 0, kind: 'radio', title: '下列哪项是 HTTP 的默认端口？', img: IMG,
+      opts: ['80', '443', '22', '21'], letter: 'A' },
+    { id: 1, kind: 'judge', title: '', img: IMG, opts: ['正确', '错误'], letter: 'A' },
+    { id: 2, kind: 'check', title: '以下属于 HTTP 请求方法的有：', opts: ['GET', 'POST', 'FTP', 'PUT'], letters: ['A', 'B', 'D'] },
+    { id: 3, kind: 'text', title: 'HTTP 状态码 200 表示____。', opts: [] }
+  ];
+
+  var list = document.getElementById('list');
+  QS.forEach(function (q) {
+    var box = document.createElement('div');
+    box.className = 'questionLi';
+    box.id = 'q' + q.id;
+
+    var name = document.createElement('h3');
+    name.className = 'mark_name';
+    var tag = q.kind === 'check' ? '[多选题]' : q.kind === 'judge' ? '[判断题]' : q.kind === 'text' ? '[填空题]' : '[单选题]';
+    var html = '<span class="colorShallow">' + tag + '</span>' + (q.title || '');
+    if (q.img) html += '<img src="' + q.img + '" alt="题目图片">';
+    name.innerHTML = html + '（2.0分）';
+    box.appendChild(name);
+
+    if (q.kind === 'text') {
+      var ta = document.createElement('textarea');
+      ta.name = 'answer' + q.id;
+      box.appendChild(ta);
+    } else {
+      var ul = document.createElement('ul');
+      ul.className = 'answerList';
+      q.opts.forEach(function (o, oi) {
+        var li = document.createElement('li');
+        li.className = 'answer_p';
+        var letter = String.fromCharCode(65 + oi);
+        li.innerHTML = '<span class="num_option">' + letter + '、</span><span>' + o + '</span>';
+        if (q.imgOpts) {
+          var oi2 = document.createElement('img');
+          oi2.src = q.imgOpts[oi];
+          li.appendChild(oi2);
+        }
+        var inp = document.createElement('input');
+        inp.type = q.kind === 'check' ? 'checkbox' : 'radio';
+        inp.name = 'q' + q.id;
+        inp.value = q.kind === 'judge' ? (oi === 0 ? 'true' : 'false') : letter;
+        inp.style.display = 'none';
+        li.appendChild(inp);
+        ul.appendChild(li);
+      });
+      box.appendChild(ul);
+    }
+    list.appendChild(box);
+  });
+
+  document.querySelectorAll('ul li').forEach(function (li) {
+    li.addEventListener('click', function () {
+      var inp = li.querySelector('input');
+      if (!inp) return;
+      if (inp.type === 'radio') inp.checked = true;
+      else inp.checked = !inp.checked;
+    });
+  });
+
+  window.btnBlueSubmit = function () {
+    window.__submitted = true;
+    window.__submittedAt = Date.now();
+    document.getElementById('bar').textContent = '已提交（模拟）';
+    document.getElementById('bar').style.color = '#16a34a';
+  };
+  window.submitCheckTimes = function () {};
+  window.noSubmit = function () { window.__noSubmit = true; };
+</script>
+</body>
+</html>

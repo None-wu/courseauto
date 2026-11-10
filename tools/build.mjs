@@ -17,6 +17,7 @@ const PARTS = [
   'src/core/10-config.js',
   'src/core/15-clock.js',
   'src/core/20-util.js',
+  'src/core/25-image.js',
   'src/core/30-panel.js',
   'src/core/40-answer.js',
   'src/core/50-font.js',

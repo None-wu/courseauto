@@ -413,7 +413,10 @@
         '<div class="hint">支持 DeepSeek / 腾讯元宝 / Kimi / 豆包 / ChatGPT / 通义(qwen) / 智谱清言(chatglm) 的网页版。换站点改这里的地址即可(桥脚本 @match 已全部覆盖,无需重装桥);必须先在该网站登录,标签页保持打开</div></div>' +
       '<div class="field"><div class="row"><div class="label">📦 整卷模式(推荐)</div>' +
         '<input id="cfgWebAiBatch" type="checkbox" ' + (CONFIG.webAiBatch ? 'checked' : '') + '></div>' +
-        '<div class="hint">开启后把整页题目一次性发给网页 AI、按题号批量回答再自动填写(1 次对话答完所有题,更快、不易触发限流);关闭则逐题询问。缺漏的题会自动回退逐题询问</div></div>' +
+        '<div class="hint">开启后把整页题目一次性发给网页 AI、按题号批量回答再自动填写(1 次对话答完所有题,更快、不易触发限流);关闭则逐题询问。缺漏的题会自动回退逐题询问。含图片的题会单独带图逐题问(整批发文字时 AI 看不到图)</div></div>' +
+      '<div class="field"><div class="row"><div class="label">🖼 图片题看原图</div>' +
+        '<input id="cfgVision" type="checkbox" ' + (CONFIG.aiVision === false ? '' : 'checked') + '></div>' +
+        '<div class="hint">题干/选项是图片(公式、电路图、代码截图)时,把图片本体一起发给 AI,而不是只发一串图片地址。网页 AI 走附件上传(需桥 1.3.2+),API 走多模态。抓图失败会在题干里保留 [图片N] 占位</div></div>' +
       '<div class="sec">🤖 AI 答题 · API 方式</div>' +
       '<div class="field"><div class="row"><div class="label">🤖 启用 AI 答题</div>' +
         '<input id="cfgAI" type="checkbox" ' + (CONFIG.aiEnabled ? 'checked' : '') + '></div>' +
@@ -486,6 +489,10 @@
       CONFIG.aiUrl = document.getElementById('cfgAIUrl').value.trim() || 'https://api.deepseek.com/v1/chat/completions';
       CONFIG.webAiEnabled = document.getElementById('cfgWebAI').checked;
       CONFIG.webAiBatch = document.getElementById('cfgWebAiBatch').checked;
+      {
+        const vEl = document.getElementById('cfgVision');
+        if (vEl) CONFIG.aiVision = vEl.checked;
+      }
       CONFIG.webAiUrl = document.getElementById('cfgWebAiUrl').value.trim() || 'https://chat.deepseek.com/';
       CONFIG.deliberateErrorRate = (parseFloat(document.getElementById('cfgErrRate').value) || 0) / 100;
       CONFIG.autoSubmit = document.getElementById('cfgSubmit').checked;

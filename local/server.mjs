@@ -32,8 +32,10 @@ const PAGES_MAP = {
   '/mooc2/work/dowork-accuracy': 'work-dowork-accuracy.html',
   '/mooc2/work/dowork-acc2': 'work-dowork-acc2.html',
   '/mooc2/work/dowork-gate': 'work-dowork-gate.html',
+  '/mooc2/work/dowork-img': 'work-dowork-img.html',
   '/mooc2/work/dowork-newver': 'work-dowork-newver.html',
   '/cards-direct.html': 'cards-direct.html',
+  '/cards-img.html': 'cards-img.html',
   '/cards-judge.html': 'cards-judge.html',
   '/cards-multi.html': 'cards-multi.html',
   '/cards-accuracy.html': 'cards-accuracy.html',
@@ -84,6 +86,8 @@ async function getAsset(key) {
 
 export function createMockServer() {
   const core = createCore({ getAsset, probeDir: PROBE_DIR });
+  // 最近一次 /v1/chat/completions 的摘要:测试端据此断言"图有没有真的送到 AI"
+  const lastChat = { prompt: '', imgParts: 0, at: 0, imgAsks: 0, lastImgPrompt: '' };
 
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -93,16 +97,40 @@ export function createMockServer() {
     if (p === '/v1/chat/completions' && req.method === 'POST') {
       const raw = await readBody(req);
       let prompt = '';
+      let imgParts = 0;
       try {
         const b = JSON.parse(raw);
-        prompt = (b.messages || []).map((m) => m.content || '').join('\n');
+        // 多模态:content 可能是 [{type:'text'},{type:'image_url'}] 数组(图片题走这条路)
+        prompt = (b.messages || []).map((m) => {
+          if (Array.isArray(m.content)) {
+            return m.content.map((c) => {
+              if (!c) return '';
+              if (c.type === 'image_url') { imgParts++; return '[图片]'; }
+              return c.text || '';
+            }).join(' ');
+          }
+          return m.content || '';
+        }).join('\n');
       } catch { /* ignore */ }
       const hit = AI_TABLE.find(([re]) => re.test(prompt));
       const answer = hit ? hit[1] : 'A';
-      console.log(`[mock-ai] ${prompt.replace(/\s+/g, ' ').slice(0, 60)} => ${answer}`);
+      Object.assign(lastChat, { prompt, imgParts, at: Date.now() });
+      if (imgParts) { lastChat.imgAsks++; lastChat.lastImgPrompt = prompt.slice(0, 200); }
+      console.log(`[mock-ai] ${prompt.replace(/\s+/g, ' ').slice(0, 60)} => ${answer}${imgParts ? ` (含图 ${imgParts} 张)` : ''}`);
       return json(res, 200, {
         choices: [{ message: { role: 'assistant', content: answer } }],
-        usage: { total_tokens: 42 }
+        usage: { total_tokens: 42, image_parts: imgParts }
+      });
+    }
+
+    // ---- 测试观测口:最近一次 AI 请求收到几张图(验收"图片题真的带图了") ----
+    if (p === '/mock/last-chat') {
+      return json(res, 200, {
+        prompt: lastChat.prompt.slice(0, 200),
+        imgParts: lastChat.imgParts,
+        imgAsks: lastChat.imgAsks,
+        lastImgPrompt: lastChat.lastImgPrompt,
+        at: lastChat.at
       });
     }
 

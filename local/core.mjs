@@ -125,7 +125,9 @@ export function createCore({ getAsset, probeDir }) {
         const o = JSON.parse(raw);
         const cxId = String(o.cxId || ('cx' + Date.now().toString(36)));
         const ttl = Math.max(90 * 1000, Number(o.timeout) || 0);
-        webaiQueue.push({ cxId, text: String(o.text || ''), href: String(o.href || ''), site: String(o.site || ''), expect: Number(o.expect) || 0, timeout: Number(o.timeout) || 0, ttl, at: Date.now() });
+        // images:题目配图的 dataURL(最多 3 张),由 AI 页的桥负责转成文件上传
+        const images = Array.isArray(o.images) ? o.images.filter((s) => typeof s === 'string' && s.startsWith('data:image/')).slice(0, 3) : [];
+        webaiQueue.push({ cxId, text: String(o.text || ''), href: String(o.href || ''), site: String(o.site || ''), expect: Number(o.expect) || 0, timeout: Number(o.timeout) || 0, ttl, images, at: Date.now() });
         while (webaiQueue.length > 20) webaiQueue.shift();
         return json(res, 200, { ok: true, cxId }), true;
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }), true; }
@@ -177,7 +179,7 @@ export function createCore({ getAsset, probeDir }) {
         if (!it || !it.cxId) return json(res, 200, { ok: false }), true;
         const tries = Number(it.tries || 0) + 1;
         if (tries > 2) return json(res, 200, { ok: false, tries }), true;
-        webaiQueue.push({ cxId: it.cxId, text: String(it.text || ''), href: String(it.href || ''), site: String(it.site || ''), expect: Number(it.expect) || 0, timeout: Number(it.timeout) || 0, ttl: it.ttl, tries, at: Date.now() });
+        webaiQueue.push({ cxId: it.cxId, text: String(it.text || ''), href: String(it.href || ''), site: String(it.site || ''), expect: Number(it.expect) || 0, timeout: Number(it.timeout) || 0, ttl: it.ttl, images: Array.isArray(it.images) ? it.images : [], tries, at: Date.now() });
         return json(res, 200, { ok: true, tries }), true;
       } catch (e) { return json(res, 400, { ok: false, error: String(e.message) }), true; }
     }

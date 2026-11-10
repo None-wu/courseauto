@@ -70,12 +70,23 @@
     return '0';
   }
 
+  // 题干/选项里的图片地址单独带一份:题干一旦被 clean 成文本,懒加载图或
+  // 不在题干容器里的配图就找不回来了(图片题全靠它送图给 AI)
+  function withImgs(el, q) {
+    if (!q) return q;
+    try {
+      const imgs = pickImagesIn(el);
+      if (imgs.length) q.titleImg = imgs;
+    } catch (e) { /* ignore */ }
+    return q;
+  }
+
   function extractQuizQuestion(el) {
     try {
       const text = applyDecryptText(cl(clean(pickTitleHtml(el))));
       if (!text) return null;
       const options = pickOptions(el).map(applyDecryptText);
-      return { question: text, options, type: inferType(el, options) };
+      return withImgs(el, { question: text, options, type: inferType(el, options) });
     } catch (e) { return null; }
   }
   // 作业页(.questionLi 容器)
@@ -90,7 +101,7 @@
       text = applyDecryptText(text);
       if (!text) return null;
       const options = pickOptions(el).map(applyDecryptText);
-      return { question: text, options, type: inferType(el, options) };
+      return withImgs(el, { question: text, options, type: inferType(el, options) });
     } catch (e) { return null; }
   }
 
@@ -981,7 +992,7 @@
       for (const o of opts) text = text.split(o).join('');
       text = cl(clean(text)).replace(/[（(]\s*[)）]\s*$/, '').slice(0, 300);
       if (!text) return null;
-      return { question: text, options: opts, type };
+      return withImgs(el, { question: text, options: opts, type });
     } catch (e) { return null; }
   }
 
