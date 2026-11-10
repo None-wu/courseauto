@@ -1,6 +1,7 @@
-// 设置面板 · 自动提交正确率阈值(可自定义)
-// 验证:默认 60 / 可改成任意 0~100 / 保存后持久化 / 越界自动收敛 / 关闭开关时输入框置灰
-// 用法:node dev/check-settings.mjs [--headed]
+// 设置面板 · 填充率固定 100% + 提交后准确率阈值 + 定时关闭
+// 验证:填充率输入框只读固定 100% / 准确率阈值可改 0~100 且越界收敛 / 开关联动置灰 /
+//       定时关闭 HH:MM 校验(非法值不生效) / 旧的「每日时长上限」已彻底移除
+// 用法:node extras/tests/check-settings.mjs [--headed]
 import { chromium } from 'playwright-core';
 import { startMock } from '../../local/server.mjs';
 import { loadGmShimCode } from './gm-shim-code.mjs';
@@ -54,6 +55,7 @@ async function main() {
   await page.waitForSelector('#cxCfgBtn', { timeout: 15000 });
 
   const openCfg = async () => {
+    if (await page.locator('#cxCfgPanel').count()) await page.evaluate(() => { const p = document.getElementById('cxCfgPanel'); if (p) p.remove(); });
     await page.click('#cxCfgBtn');
     await page.waitForSelector('#cxCfgPanel', { timeout: 5000 });
   };
@@ -61,47 +63,74 @@ async function main() {
     try { return JSON.parse(localStorage.getItem('cxMock:cxConfig') || '{}'); } catch (e) { return {}; }
   });
 
-  // 1) 默认值 60
+  // 1) 填充率固定 100%、只读不可改
   await openCfg();
-  const defVal = await page.inputValue('#cfgAccuracy');
-  const defEnabled = await page.isEnabled('#cfgAccuracy');
-  record('设置面板出现「正确率阈值」输入框,默认 60', defVal === '60' && defEnabled, `value=${defVal} enabled=${defEnabled}`);
+  const fillVal = await page.inputValue('#cfgAccuracy');
+  const fillDisabled = await page.isDisabled('#cfgAccuracy');
+  record('填充率输入框固定显示 100%', fillVal.replace(/\s/g, '') === '100%', `value=${fillVal}`);
+  record('填充率输入框只读不可编辑', fillDisabled === true, `disabled=${fillDisabled}`);
 
-  // 2) 改成 85 保存并持久化
-  await page.fill('#cfgAccuracy', '85');
+  // 2) 旧「每日时长上限」输入框已移除
+  const hasDaily = await page.locator('#cfgDaily').count();
+  record('旧的「每日时长上限」输入框已移除', hasDaily === 0, `#cfgDaily count=${hasDaily}`);
+
+  // 3) 准确率阈值默认 90,可改
+  const defAcc = await page.inputValue('#cfgMinAcc');
+  record('准确率阈值默认 90', defAcc === '90', `value=${defAcc}`);
+  await page.fill('#cfgMinAcc', '85');
   await page.click('#cfgSave');
   await page.waitForTimeout(300);
   const saved = await readCfg();
   record('改成 85% 后保存成功(0.85)', Math.abs((saved.minAccuracy || 0) - 0.85) < 1e-6, `minAccuracy=${saved.minAccuracy}`);
 
-  // 3) 重新打开面板,读回 85
+  // 4) 重新打开读回 85
   await openCfg();
-  const reopened = await page.inputValue('#cfgAccuracy');
+  const reopened = await page.inputValue('#cfgMinAcc');
   record('重新打开设置仍显示 85', reopened === '85', `value=${reopened}`);
 
-  // 4) 越界:150 → 收敛为 100
-  await page.fill('#cfgAccuracy', '150');
+  // 5) 越界 150 → 100
+  await page.fill('#cfgMinAcc', '150');
   await page.click('#cfgSave');
   await page.waitForTimeout(300);
   const clamped = await readCfg();
-  await openCfg();
-  const clampVal = await page.inputValue('#cfgAccuracy');
-  record('越界值 150 自动收敛为 100', Math.abs((clamped.minAccuracy || 0) - 1) < 1e-6 && clampVal === '100', `minAccuracy=${clamped.minAccuracy} value=${clampVal}`);
+  record('越界值 150 自动收敛为 100', Math.abs((clamped.minAccuracy || 0) - 1) < 1e-6, `minAccuracy=${clamped.minAccuracy}`);
 
-  // 5) 负数 → 收敛为 0(不看正确率)
-  await page.fill('#cfgAccuracy', '-20');
+  // 6) 负数 -20 → 0
+  await openCfg();
+  await page.fill('#cfgMinAcc', '-20');
   await page.click('#cfgSave');
   await page.waitForTimeout(300);
   const neg = await readCfg();
-  await openCfg();
-  const negVal = await page.inputValue('#cfgAccuracy');
-  record('负数 -20 自动收敛为 0', Math.abs(neg.minAccuracy || 0) < 1e-6 && negVal === '0', `minAccuracy=${neg.minAccuracy} value=${negVal}`);
+  record('负数 -20 自动收敛为 0', Math.abs(neg.minAccuracy || 0) < 1e-6, `minAccuracy=${neg.minAccuracy}`);
 
-  // 6) 关闭「自动提交」后输入框置灰
-  await page.uncheck('#cfgSubmit');
+  // 7) 关闭准确率检测开关 → 阈值输入置灰
+  await openCfg();
+  await page.uncheck('#cfgAccCheck');
   await page.waitForTimeout(150);
-  const disabled = await page.isDisabled('#cfgAccuracy');
-  record('关闭自动提交后阈值输入框置灰不可编辑', disabled === true, `disabled=${disabled}`);
+  const accDisabled = await page.isDisabled('#cfgMinAcc');
+  record('关闭「提交后准确率检测」后阈值输入置灰', accDisabled === true, `disabled=${accDisabled}`);
+
+  // 8) 定时关闭:合法值生效、非法值不覆盖
+  await page.fill('#cfgStopAt', '23:30');
+  await page.click('#cfgSave');
+  await page.waitForTimeout(300);
+  const stopOk = await readCfg();
+  record('定时关闭 23:30 保存成功', stopOk.stopAtTime === '23:30', `stopAtTime=${stopOk.stopAtTime}`);
+
+  await openCfg();
+  await page.fill('#cfgStopAt', '25:99');
+  await page.click('#cfgSave');
+  await page.waitForTimeout(300);
+  const stopBad = await readCfg();
+  record('非法时间 25:99 不生效(保持 23:30)', stopBad.stopAtTime === '23:30', `stopAtTime=${stopBad.stopAtTime}`);
+
+  // 9) 清空 → 不关闭
+  await openCfg();
+  await page.fill('#cfgStopAt', '');
+  await page.click('#cfgSave');
+  await page.waitForTimeout(300);
+  const stopNone = await readCfg();
+  record('清空定时关闭后 stopAtTime 为空', !stopNone.stopAtTime, `stopAtTime=${JSON.stringify(stopNone.stopAtTime)}`);
 
   record('运行期无 JS 异常', errors.length === 0, errors.slice(0, 2).join(' | ') || '无');
 

@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -30,7 +30,7 @@
     btn.textContent = '下一章';
     btn.onclick = function () {
       window.__nextChapterClicks++;
-      document.getElementById('iframe').src = cardsBase + '?ch=' + (ch + 1);
+      document.getElementById('iframe').src = withCh(ch + 1);
       mountNext(ch + 1);
     };
     nav.appendChild(btn);
@@ -40,7 +40,9 @@
   var ch = Number(params.get('ch') || 1);
   // 允许测试时指定不同的卡片页(?cards=/cards-direct.html)
   var cardsBase = params.get('cards') || '/cards.html';
-  document.getElementById('iframe').src = cardsBase + '?ch=' + ch;
+  // 卡片页自带查询串时用 & 拼 ch,避免 ?all=1?ch=1 这种坏地址
+  function withCh(n) { return cardsBase + (cardsBase.indexOf('?') >= 0 ? '&' : '?') + 'ch=' + n; }
+  document.getElementById('iframe').src = withCh(ch);
   mountNext(ch);
 </script>
 </body>

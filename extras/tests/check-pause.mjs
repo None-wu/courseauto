@@ -37,7 +37,8 @@ function record(name, ok, detail) {
 
 const readState = (page) => page.evaluate(() => {
   const status = (document.getElementById('cxStatus') || {}).textContent || '';
-  const time = (document.getElementById('cxStatTime') || {}).textContent || '';
+  const timeEl = document.getElementById('cxStatTime');   // 时长统计已删除,应始终为 null
+  const time = timeEl ? timeEl.textContent || '' : '';
   const logs = (document.getElementById('cxLogs') || {}).textContent || '';
   const cards = document.querySelector('#iframe');
   let player = null;
@@ -46,7 +47,7 @@ const readState = (page) => page.evaluate(() => {
     const vf = frames.find((f) => String(f.src || '').includes('/ananas/modules/video/'));
     if (vf && vf.contentWindow && vf.contentWindow.videojs) player = { paused: vf.contentWindow.videojs().paused() };
   } catch (e) { /* ignore */ }
-  return { status, time, logs, player };
+  return { status, time, hasTime: !!timeEl, logs, player };
 }).catch(() => null);
 
 async function waitFor(page, pred, timeoutMs = 20000, step = 250) {
@@ -95,11 +96,10 @@ async function main() {
 
   await a.page.waitForTimeout(1500);
   const settled = await readState(a.page);
-  const t1 = settled && settled.time;
+  record('面板已无「运行时长」统计(该功能已删除)', !!settled && settled.hasTime === false,
+    settled ? `cxStatTime=${settled.hasTime}` : '—');
   await a.page.waitForTimeout(3000);
   const after3s = await readState(a.page);
-  const t2 = after3s && after3s.time;
-  record('暂停期间运行时长不再增长', !!t1 && !!t2 && t1 === t2, `${t1} → ${t2}`);
   record('暂停期间视频保持暂停(没被自动拉起)', !!after3s && after3s.player && after3s.player.paused === true,
     `paused=${after3s && after3s.player && after3s.player.paused}`);
 
@@ -109,7 +109,7 @@ async function main() {
     `paused=${resumed && resumed.player && resumed.player.paused}`);
   await a.page.waitForTimeout(2500);
   const laterTime = await readState(a.page);
-  record('恢复后运行时长继续增长', !!laterTime && !!t2 && laterTime.time !== t2, `${t2} → ${laterTime && laterTime.time}`);
+  record('恢复后不再是暂停状态', !!laterTime && !/已暂停/.test(laterTime.status || ''), `状态=${laterTime && laterTime.status}`);
   record('场景 A 无 JS 异常', a.errors.length === 0, a.errors.slice(0, 2).join(' | ') || '无');
   await a.page.screenshot({ path: path.join(__dirname, 'out', 'check-pause.png') });
   await a.page.context().close();

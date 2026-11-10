@@ -6,8 +6,8 @@
  *       自动检查：有没有漏题、多选题是不是只填了一个、有没有连续多题同答案（点漏高危）。
  *
  * 用法：
- *   node tools/自检-答题记录检查.js 答题记录.txt
- *   node tools/自检-答题记录检查.js 答题记录.txt --total=50 --single=1-15 --multi=16-30 --judge=31-50
+ *   node extras/自检-答题记录检查.js 答题记录.txt
+ *   node extras/自检-答题记录检查.js 答题记录.txt --total=50 --single=1-15 --multi=16-30 --judge=31-50
  *
  * 记录文件长什么样都行，只要题号和答案挨着。以下写法都能识别：
  *   第12题 → C          12 → C         12. C        12、C
@@ -21,7 +21,7 @@ const fs = require('fs');
 const args = process.argv.slice(2);
 const file = args.find((a) => !a.startsWith('--'));
 if (!file) {
-  console.log('用法: node tools/自检-答题记录检查.js <记录文件> [--total=50] [--single=1-15] [--multi=16-30] [--judge=31-50]');
+  console.log('用法: node extras/自检-答题记录检查.js <记录文件> [--total=50] [--single=1-15] [--multi=16-30] [--judge=31-50]');
   process.exit(2);
 }
 const opt = (name, def) => {

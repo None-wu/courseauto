@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><title>文档任务(模拟)</title>
 <style>body{margin:0;font:13px/1.8 "Microsoft YaHei";background:#fff;color:#333;height:2600px;padding:8px}</style></head>
@@ -6,5 +6,18 @@
 <h3>模拟 PDF / 文档任务</h3>
 <p>脚本会滚动到页面底部并停留，表示"看完"。</p>
 <div id="panView" style="height:200px;overflow:auto"></div>
+<script>
+// 模拟平台回执:只有真正"滚到底看完"才把任务点标为完成
+(function () {
+  var timer = setInterval(function () {
+    var d = document.scrollingElement || document.documentElement;
+    if (!d) return;
+    if (d.scrollTop > 0 && d.scrollTop + window.innerHeight >= d.scrollHeight - 100) {
+      window.__docDone = true;
+      clearInterval(timer);
+    }
+  }, 250);
+})();
+</script>
 </body>
 </html>

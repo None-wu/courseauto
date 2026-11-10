@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head><meta charset="utf-8"><title>图片任务(模拟)</title>
 <style>body{margin:0;padding:8px;font:13px/1.8 "Microsoft YaHei";background:#fff;color:#333;height:1800px}</style></head>
@@ -6,5 +6,18 @@
 <h3>模拟图片任务</h3>
 <div style="height:400px;background:#eef2ff;border-radius:8px">图片占位 1</div>
 <div style="height:400px;background:#f7f0ff;border-radius:8px;margin-top:8px">图片占位 2</div>
+<script>
+// 模拟平台回执:只有真正"滚到底看完"才把任务点标为完成
+(function () {
+  var timer = setInterval(function () {
+    var d = document.scrollingElement || document.documentElement;
+    if (!d) return;
+    if (d.scrollTop > 0 && d.scrollTop + window.innerHeight >= d.scrollHeight - 100) {
+      window.__docDone = true;
+      clearInterval(timer);
+    }
+  }, 250);
+})();
+</script>
 </body>
 </html>

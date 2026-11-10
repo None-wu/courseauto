@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dowork · 弹窗式判分「未达及格线,请重做」(模拟)</title>
+<style>
+  body { margin: 0; padding: 12px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #333; background: #fff; }
+  .questionLi { border: 1px solid #e5e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .mark_name { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  .colorShallow { color: #8a90a2; font-weight: 400; }
+  ul { list-style: none; padding: 0; margin: 6px 0 0; }
+  li { padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; }
+  .num_option { color: #8a90a2; margin-right: 4px; }
+  .ansLine { font-size: 12px; margin-top: 4px; color: #4a5163; }
+  #mask { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: none; z-index: 99; }
+  #mask.on { display: block; }
+  .layui-layer { position: fixed; left: 50%; top: 40%; transform: translate(-50%,-50%); width: 300px; background: #fff; border-radius: 6px; box-shadow: 0 6px 24px rgba(0,0,0,.2); display: none; z-index: 100; }
+  .layui-layer.on { display: block; }
+  .layui-layer-title { padding: 8px 12px; font-weight: 600; border-bottom: 1px solid #eee; }
+  .layui-layer-content { padding: 16px 12px; font-size: 13px; }
+  .layui-layer-btn { text-align: right; padding: 8px 12px; border-top: 1px solid #f1f2f6; }
+  .layui-layer-btn a { display: inline-block; padding: 4px 12px; margin-left: 6px; border-radius: 4px; background: #f3f4f8; cursor: pointer; }
+  .layui-layer-btn0 { background: #2f6fed; color: #fff; }
+  #redoBtn { margin-top: 8px; padding: 4px 10px; }
+  #bar { margin-top: 8px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h3>第 6 章 · 章节测验(弹窗式判分:无分数、无对错图标)</h3>
+<div id="list"></div>
+<div id="bar">未提交</div>
+<div id="mask"></div>
+<div class="layui-layer" id="gateBox">
+  <div class="layui-layer-title">提示</div>
+  <div class="layui-layer-content">未达及格线，请重做</div>
+  <div class="layui-layer-btn">
+    <a class="layui-layer-btn1" id="gateCancel">取消</a>
+    <a class="layui-layer-btn0" id="gateOk">确定</a>
+  </div>
+</div>
+<script>
+  // 用途:复现"提交后平台只弹一个『未达及格线,请重做』、页面上既没有正确率也没有对错 class"的判分页。
+  // 旧逻辑在这类页面读不到判分 → 当成"此节点不支持重复提交"直接放弃,错题永远得不到修正。
+  // 期望:关掉弹窗 → 按"有错题"处理 → 修正错题 → 点重做。
+  var params = new URLSearchParams(location.search);
+  var allowRedo = params.get('redo') !== '0';
+  var list = document.getElementById('list');
+  function shell(id, title) {
+    var box = document.createElement('div');
+    box.className = 'questionLi';
+    box.id = 'q' + id;
+    var name = document.createElement('h3');
+    name.className = 'mark_name';
+    name.innerHTML = '<span class="colorShallow">[单选题]</span>' + title + '（2.0分）';
+    box.appendChild(name);
+    list.appendChild(box);
+    return box;
+  }
+  function choices(box, qid, opts) {
+    var ul = document.createElement('ul');
+    opts.forEach(function (o, i) {
+      var li = document.createElement('li');
+      var letter = String.fromCharCode(65 + i);
+      li.innerHTML = '<span class="num_option">' + letter + '、</span><span class="after">' + o + '</span>';
+      var inp = document.createElement('input');
+      inp.type = 'radio';
+      inp.name = 'q' + qid;
+      inp.value = letter;
+      inp.style.display = 'none';
+      li.appendChild(inp);
+      li.addEventListener('click', function () {
+        Array.prototype.forEach.call(box.querySelectorAll('input'), function (x) { x.checked = false; });
+        inp.checked = true;
+      });
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  }
+  var q1 = shell(0, '下列哪项是 HTTP 的默认端口？');
+  choices(q1, 0, ['80', '443', '22', '21']);
+  var q2 = shell(1, '1 + 1 等于几（平台判分与 AI 故意不一致）');
+  choices(q2, 1, ['1', '2', '3', '4']);
+
+  var TRUTH = ['A', 'C'];
+
+  window.btnBlueSubmit = function () {
+    window.__submitted = true;
+    document.getElementById('bar').textContent = '已提交（模拟）';
+    document.getElementById('mask').classList.add('on');
+    document.getElementById('gateBox').classList.add('on');
+  };
+  window.submitCheckTimes = function () {};
+  window.noSubmit = function () { window.__noSubmit = true; };
+  document.getElementById('gateCancel').addEventListener('click', function () {
+    window.__gateCancel = (window.__gateCancel || 0) + 1;
+    document.getElementById('mask').classList.remove('on');
+    document.getElementById('gateBox').classList.remove('on');
+  });
+  document.getElementById('gateOk').addEventListener('click', function () {
+    window.__gateOk = (window.__gateOk || 0) + 1;
+    document.getElementById('mask').classList.remove('on');
+    document.getElementById('gateBox').classList.remove('on');
+    renderDetail();
+  });
+
+  // 关掉弹窗后才露出明细:只给"我的答案 / 正确答案"两行文本,没有 dui/cuo class,也没有百分比
+  function renderDetail() {
+    if (window.__detailShown) return;
+    window.__detailShown = true;
+    Array.prototype.forEach.call(document.querySelectorAll('.questionLi'), function (box, i) {
+      var checked = box.querySelector('input[type=radio]:checked');
+      var picked = checked ? checked.value : '';
+      var mine = document.createElement('div');
+      mine.className = 'ansLine';
+      mine.textContent = '我的答案：' + picked;
+      box.appendChild(mine);
+      if (picked !== TRUTH[i]) {
+        var right = document.createElement('div');
+        right.className = 'ansLine';
+        right.textContent = '正确答案：' + TRUTH[i];
+        box.appendChild(right);
+      }
+    });
+    if (allowRedo) {
+      var btn = document.createElement('button');
+      btn.id = 'redoBtn';
+      btn.textContent = '重做';
+      btn.style.cssText = 'margin-top:8px;padding:4px 10px;';
+      btn.addEventListener('click', function () {
+        window.__redoClicked = true;
+        document.getElementById('bar').textContent = '已重做（模拟）';
+      });
+      document.body.appendChild(btn);
+    }
+  }
+</script>
+</body>
+</html>

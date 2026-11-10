@@ -51,7 +51,7 @@
   let aiFailCount = 0;
   let aiCooldownUntil = 0;
   let aiCooldownWarned = false;
-  function channelAI(q) {
+  function channelAI(q, hint) {
     return new Promise((resolve) => {
       if (Date.now() < aiCooldownUntil) {
         if (!aiCooldownWarned) {
@@ -61,7 +61,7 @@
         resolve({ form: 'AI(冷却中)', answer: [] });
         return;
       }
-      const prompt = buildAIPrompt(q);
+      const prompt = hint ? buildAIPrompt(q) + `\n\n注意:${hint}` : buildAIPrompt(q);
       const data = JSON.stringify({
         model: CONFIG.aiModel,
         messages: [
@@ -223,7 +223,8 @@
     });
   }
 
-  function buildAskText(q) {
+  // hint:错题重问时追加的"上次这么答被判错了"提示,帮 AI 换思路而不是重复同一个错答案
+  function buildAskText(q, hint) {
     const typeName = ({ '0': '单选题', '1': '多选题', '2': '填空题', '3': '判断题' })[String(q.type)] || '简答题';
     const opts = (q.options || []).map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`).join('\n');
     return [
@@ -232,7 +233,8 @@
       `题目:${q.question}`,
       opts ? `选项:\n${opts}` : '',
       '',
-      '答案格式:单选题写字母(如 C);多选题写字母组合(如 ABD);判断题写「正确」或「错误」;填空题多个空用 | 分隔。'
+      '答案格式:单选题写字母(如 C);多选题写字母组合(如 ABD);判断题写「正确」或「错误」;填空题多个空用 | 分隔。',
+      hint ? `\n注意:${hint}` : ''
     ].filter(Boolean).join('\n');
   }
 
@@ -374,21 +376,29 @@
       } catch (e) { /* 网络抖动,继续轮询 */ }
     }
     // 超时:查一次状态,把"谁没干活"说清楚
-    let hint = '请打开网页 AI 地址并保持开着';
+    // 注意 sites 是 [{host,ver,tick}] 对象数组,不能用 indexOf(字符串) 判在线(恒 -1,分支永远进不去)
+    let hint = `请打开 ${site || '网页 AI 地址'} 并保持标签页开着`;
     try {
       const st = JSON.parse(await cxFetch(base + '/api/webai/status', { timeout: 6000 }));
-      if (st.sites && st.sites.indexOf(site) >= 0) {
-        hint = '网页 AI 页已连上但没回复 —— 到 AI 页看看它是否回答卡住';
+      const sites = Array.isArray(st.sites) ? st.sites : [];
+      const mine = sites.find((s) => s && s.host === site);
+      if (mine) {
+        hint = `网页 AI 页已连上(${site})但没回复 —— 到 AI 页看看是不是回答卡住/还在生成`;
+      } else if (sites.length) {
+        hint = `中转里在线的是 ${sites.map((s) => s.host).join(' / ')},不是当前配置的 ${site}` +
+          ' —— 把面板里的「网页 AI 地址」改成在线的那个站点,或打开当前站点并登录';
       } else if (st.bridgeOnline) {
         hint = '检测到旧版桥在轮询 —— 请重装「网页 AI 桥」(v1.0.6+)并刷新 AI 页面';
+      } else {
+        hint = `没有任何在线桥 —— 请打开 ${site} 页面并登录,确认装了「网页 AI 桥」且标签页没关`;
       }
     } catch (e) { /* ignore */ }
     return { ok: true, result: { text: '', error: `等待网页 AI 回复超时(${Math.round(timeoutMs / 1000)}s):` + hint } };
   }
 
-  async function channelWebAI(q) {
+  async function channelWebAI(q, hint) {
     const timeout = (CONFIG.webAiTimeout || 60) * 1000;
-    const r = await askWebAI(buildAskText(q), timeout);
+    const r = await askWebAI(buildAskText(q, hint), timeout);
     if (r.error) { log('网页 AI: ' + r.error, 'warn'); return { form: '网页AI', answer: [] }; }
     const raw = String(r.text || '').trim();
     if (!raw) { log('网页 AI 返回内容为空', 'warn'); return { form: '网页AI', answer: [] }; }
@@ -471,24 +481,38 @@
   }
 
   let aiKeyWarned = false;
-  async function getAnswers(q) {
+  // hint:可选,错题重问时把"上次判错的答案"带进去让 AI 换思路
+  async function getAnswers(q, hint) {
+    // 错题本优先:之前被判错、随后重问 AI 或从结果页取到正确答案的题,重做时直接用修正答案
+    if (!hint) {
+      const fixed = lookupFix(q.question);
+      if (fixed && fixed.length) {
+        STATS.answered++;
+        log(`[错题本] 命中修正答案: ${fixed.join(' / ')}`, 'ok');
+        return fixed;
+      }
+    }
+    // 通道按优先级顺序尝试,任一通道拿到答案即返回。
+    // 原实现是 if/else if 二选一:开了网页 AI 就再不会走 API 通道,网页 AI 一挂就整卷无答案。
     if (CONFIG.webAiEnabled) {
-      const r = await channelWebAI(q);
+      const r = await channelWebAI(q, hint);
       const ans = filterAnswers(r.answer);
       if (ans.length) {
         STATS.answered++;
         log(`[${r.form}] 查到答案: ${ans.join(' / ')}`, 'ok');
         return ans;
       }
-    } else if (CONFIG.aiEnabled && CONFIG.aiKey) {
-      const r = await channelAI(q);
+      if (CONFIG.aiEnabled && CONFIG.aiKey) log('网页 AI 没给出答案,回退到 API 通道再问一次', 'warn');
+    }
+    if (CONFIG.aiEnabled && CONFIG.aiKey) {
+      const r = await channelAI(q, hint);
       const ans = filterAnswers(r.answer);
       if (ans.length) {
         STATS.answered++;
         log(`[AI] 查到答案: ${ans.join(' / ')}`, 'ok');
         return ans;
       }
-    } else if (!aiKeyWarned) {
+    } else if (!CONFIG.webAiEnabled && !aiKeyWarned) {
       aiKeyWarned = true;
       log('⚠ 未启用 AI 答题:点面板 ⚙ → 勾选「网页 AI 答题」或「AI 答题」并配置,否则无法自动做题', 'warn');
     }
@@ -504,7 +528,7 @@
       }
     }
     const reason = CONFIG.webAiEnabled
-      ? '(原因:网页 AI 没返回答案 —— 检查 AI 页面是否打开、是否装了「网页AI桥」)'
+      ? '(原因:网页 AI 和 API 都没返回答案 —— 检查 AI 页面是否打开、是否装了「网页AI桥」)'
       : (!CONFIG.aiEnabled || !CONFIG.aiKey) ? '(原因:AI 答题未启用,请点 ⚙ 配置)' : '';
     log('未查到答案' + reason, 'warn');
     return [];
@@ -536,10 +560,28 @@
   }
 
   // 清空当前已勾选的选项(重做时避免旧答案残留叠加)
+  // 必须连「答案隐藏域 + check_answer 选中标记」一起清:
+  // 只清真控件时,重做场景里残留的 answer<qid>/check_answer 会让 choicePicked 误判
+  // 「这题已经选好了」而跳过点击,旧式 checkbox 页面就一直是空勾状态。
   function clearCurrent(el) {
+    // 真控件直接改 checked,不要 click:老式页面的 click 处理器是 toggle 语义
+    // (inp.checked = !inp.checked),点一下会被它自己翻回去,清不干净。
     el.querySelectorAll('input[type=radio], input[type=checkbox]').forEach((inp) => {
-      if (inp.checked) { try { inp.click(); } catch (e) { /* ignore */ } }
+      try { if (inp.checked) inp.checked = false; } catch (e) { /* ignore */ }
     });
+    try {
+      const doc = el.ownerDocument || document;
+      const qids = new Set();
+      el.querySelectorAll('li[qid]').forEach((n) => qids.add(n.getAttribute('qid')));
+      qids.forEach((qid) => {
+        if (!qid) return;
+        const hid = doc.getElementById('answer' + qid);
+        if (hid) hid.value = '';
+      });
+    } catch (e) { /* ignore */ }
+    try {
+      el.querySelectorAll('.check_answer').forEach((n) => { n.classList.remove('check_answer'); });
+    } catch (e) { /* ignore */ }
   }
 
   /* ==================== 网页 AI 启动关卡 ==================== */

@@ -93,7 +93,9 @@ async function main() {
   record('Q5 isTrusted 拦截页:不假成功(不误报已作答)', !!p[4] && p[4].divs.length === 0 && /点击均未生效/.test(logs), `picked=${JSON.stringify(p[4])}`);
   record('Q5 失败被回传探针(服务端可查)', true, '见 local/server.mjs /api/probe 记录');
   record('日志显示 4/5 已作答', /4\/5/.test(logs), logs.includes('4/5') ? '查 #cxLogs' : '未出现 4/5');
-  record('已触发提交', !!st && st.submitted === true, st ? `submitted=${st.submitted}` : '—');
+  // 规则:填充率必须 100% 才提交。Q5 是反自动化拦截页(合成事件被忽略),这题注定填不上,
+  // 因此 4/5 = 80% 时应「不提交」,并把任务点记进「未提交」栏,而不是硬着头皮交白卷。
+  record('填充率不足(4/5)时不提交', !!st && st.submitted === false, st ? `submitted=${st.submitted}` : '—');
   record('运行期无 JS 异常', errors.length === 0, errors.slice(0, 2).join(' | ') || '无');
 
   fs.writeFileSync(path.join(__dirname, 'out', 'check-multi.log'), logs, 'utf8');

@@ -42,10 +42,9 @@
       answerIntervalMax: 0,
       submitDelayMin: 0,
       submitDelayMax: 0,
-      minAccuracy: 0.6,
-      quizDelayMin: 0,
-      quizDelayMax: 0,
-      dailyLimitMinutes: 0,
+      minAccuracy: 0.9,          // 提交后准确率阈值(只对可重复提交的节点生效)
+      accCheckEnabled: true,
+      stopAtTime: '',            // 定时关闭(HH:MM),空 = 不关闭
       deliberateErrorRate: 0,
       aiEnabled: true,
       aiKey: 'sk-mock-1234',

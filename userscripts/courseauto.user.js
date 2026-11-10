@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         刷课助手(学习通/智慧树/雨课堂)
 // @namespace    cx-auto-study
-// @version      1.4.4
+// @version      1.5.2
 // @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
 // @author       courseauto contributors
 // @license      MIT
@@ -61,16 +61,17 @@
     autoVideo: true,       // 自动处理视频任务
     autoAudio: true,       // 自动处理音频任务
     autoWork: true,        // 自动做章节测验
-    autoSubmit: true,      // 正确率达标自动提交测验
+    autoSubmit: true,      // 填充率 100%(所有题都作答成功)才自动提交测验
     autoJump: true,        // 本章完成后自动切下一章
     answerIntervalMin: 0,  // 每题最小间隔(秒,0=最快)
     answerIntervalMax: 0,  // 每题最大间隔(秒,0=最快)
     submitDelayMin: 0,     // 提交前最小延迟(秒,0=最快)
     submitDelayMax: 0,     // 提交前最大延迟(秒,0=最快)
-    minAccuracy: 0.6,      // 最低正确率,低于则暂存不提交
-    quizDelayMin: 0,       // 弹题作答前等待(秒,0=最快)
-    quizDelayMax: 0,
-    dailyLimitMinutes: 0,   // 每日刷课时长上限(分钟),0 = 不限
+    stopAtTime: '',        // 定时关闭(HH:MM),到点自动停止挂机;留空 = 不关闭
+    accCheckEnabled: false, // 提交后检测准确率(仅对「可重复提交」的任务点生效)
+    minAccuracy: 0.9,      // 提交后要求的准确率,低于则重问错题(需 accCheckEnabled)
+    accFixAllWrong: true,  // 只要有错题就去修(不看整体准确率);关掉则仅在低于 minAccuracy 时才修
+    accRedoMax: 2,          // 同一节点最多自动重做几次(防死循环)
     deliberateErrorRate: 0, // 故意答错率 0~0.2(0=不故意错)
     aiEnabled: false,      // 启用 DeepSeek AI 答题(需填 key)
     aiKey: '',              // 个人 API Key:点面板 ⚙ 填写(platform.deepseek.com 创建,只存本机)
@@ -80,6 +81,7 @@
     reportUrl: '',          // 状态上报地址(调试用,留空=关闭);如 http://127.0.0.1:8790/report
     webAiEnabled: false,    // 网页 AI 答题(免 API Key,需配合「网页AI桥」脚本)
     webAiBatch: true,       // 整卷模式:整页题目一次性发给网页 AI,批量解析后逐题填写(更快、不易限流;缺漏的题自动回退逐题询问)
+    webAiBatchRetry: true,  // 整卷缺题时再整批补问一次(关掉则直接逐题回退)
     webAiUrl: 'https://chat.deepseek.com/',  // 网页 AI 地址
     webAiRelay: 'http://127.0.0.1:8790',     // 本地中转服务(桥脚本经此收题,AI 页手动打开即可)
     webAiTimeout: 60,       // 等网页 AI 回复的超时(秒)
@@ -101,13 +103,27 @@
     } catch (e) { /* ignore */ }
   }
   let CONFIG = loadConfig();
-  // 一次性迁移(v1.0.6):旧存储的 240 分钟上限 / 1x 倍速 强制升级为新默认(0 不限 + 2x)
+  // 一次性迁移(v1.0.6):旧存储的 1x 倍速 强制升级为新默认 2x
   try {
     const MIG = 'cxMigV105';
     const done = (typeof GM_getValue !== 'undefined') ? GM_getValue(MIG, false) : localStorage.getItem(MIG);
     if (!done) {
-      CONFIG.dailyLimitMinutes = 0;
       CONFIG.speed = 2;
+      saveConfig(CONFIG);
+      if (typeof GM_setValue !== 'undefined') GM_setValue(MIG, true);
+      else localStorage.setItem(MIG, '1');
+    }
+  } catch (e) { /* ignore */ }
+  // 一次性迁移(v1.5.0):清掉已废弃的配置键(每日时长上限/弹题延迟),
+  // 并把 minAccuracy 从"提交前正确率门槛"重置为"提交后准确率阈值"
+  try {
+    const MIG = 'cxMigV150';
+    const done = (typeof GM_getValue !== 'undefined') ? GM_getValue(MIG, false) : localStorage.getItem(MIG);
+    if (!done) {
+      delete CONFIG.dailyLimitMinutes;
+      delete CONFIG.quizDelayMin;
+      delete CONFIG.quizDelayMax;
+      CONFIG.minAccuracy = 0.9;
       saveConfig(CONFIG);
       if (typeof GM_setValue !== 'undefined') GM_setValue(MIG, true);
       else localStorage.setItem(MIG, '1');
@@ -149,6 +165,132 @@
     ta.focus(); ta.select();
     ta.addEventListener('blur', () => { try { ta.remove(); } catch (e) {} });
     log('📋 题目数据已生成在左下角文本框,全选(Ctrl+A)复制后发给 AI 助手', 'ok');
+  }
+
+  /* ==================== 错题本 ==================== */
+  // 提交后准确率不达标时,把判错的题单独重问 AI,结果按题干存本地;
+  // 下次重做同一任务点优先命中,避免同一道题再做错一次。
+  let FIX_BANK = [];
+  try {
+    const raw = (typeof GM_getValue !== 'undefined') ? GM_getValue('cxFixBank', []) : JSON.parse(localStorage.getItem('cxFixBank') || '[]');
+    if (Array.isArray(raw)) FIX_BANK = raw;
+  } catch (e) { FIX_BANK = []; }
+  function fixKey(s) {
+    return String(s || '').replace(/[\s\u3000]/g, '').replace(/[，。、；：？！,.;:?!"'“”‘’（）()《》<>【】\[\]]/g, '').slice(0, 80);
+  }
+  function recordFix(q, answer) {
+    try {
+      const key = fixKey(q.question);
+      if (!key || !answer || !answer.length) return;
+      const idx = FIX_BANK.findIndex((it) => it.k === key);
+      const entry = { k: key, q: String(q.question).slice(0, 200), t: String(q.type), a: answer.join('|'), n: Date.now() };
+      if (idx >= 0) FIX_BANK[idx] = entry; else FIX_BANK.push(entry);
+      if (FIX_BANK.length > 2000) FIX_BANK = FIX_BANK.slice(-2000);
+      if (typeof GM_setValue !== 'undefined') GM_setValue('cxFixBank', FIX_BANK);
+      else localStorage.setItem('cxFixBank', JSON.stringify(FIX_BANK));
+    } catch (e) { /* ignore */ }
+  }
+  function lookupFix(question) {
+    try {
+      const key = fixKey(question);
+      if (!key) return null;
+      const hit = FIX_BANK.find((it) => it.k === key);
+      return hit ? String(hit.a || '').split('|').filter(Boolean) : null;
+    } catch (e) { return null; }
+  }
+
+  /* ==================== 未成功提交的任务点记录 ==================== */
+  // 交不上去(填充率不足/提交按钮没找到/提交异常)的任务点单独留档,
+  // 面板单列一栏展示,方便用户直接定位到哪个章节的哪个节点需要手动补交。
+  let SUBMIT_FAILS = [];
+  try {
+    const raw = (typeof GM_getValue !== 'undefined') ? GM_getValue('cxSubmitFails', []) : JSON.parse(localStorage.getItem('cxSubmitFails') || '[]');
+    if (Array.isArray(raw)) SUBMIT_FAILS = raw;
+  } catch (e) { SUBMIT_FAILS = []; }
+  function recordSubmitFail(entry) {
+    try {
+      const item = {
+        t: Date.now(),
+        chapter: String(entry.chapter || ''),
+        node: String(entry.node || ''),
+        reason: String(entry.reason || ''),
+        href: String(entry.href || location.href).slice(0, 300)
+      };
+      // 同一节点重复失败只保留最后一次(按 chapter+node 去重)
+      const idx = SUBMIT_FAILS.findIndex((it) => it.chapter === item.chapter && it.node === item.node);
+      if (idx >= 0) SUBMIT_FAILS[idx] = item; else SUBMIT_FAILS.push(item);
+      if (SUBMIT_FAILS.length > 300) SUBMIT_FAILS = SUBMIT_FAILS.slice(-300);
+      if (typeof GM_setValue !== 'undefined') GM_setValue('cxSubmitFails', SUBMIT_FAILS);
+      else localStorage.setItem('cxSubmitFails', JSON.stringify(SUBMIT_FAILS));
+      log(`📕 未提交任务点已记入「未提交」栏:${item.chapter} / ${item.node}(${item.reason})`, 'err');
+    } catch (e) { /* ignore */ }
+  }
+  function clearSubmitFails() {
+    SUBMIT_FAILS = [];
+    try {
+      if (typeof GM_setValue !== 'undefined') GM_setValue('cxSubmitFails', []);
+      else localStorage.setItem('cxSubmitFails', '[]');
+    } catch (e) { /* ignore */ }
+  }
+  function submitFailCount() { return SUBMIT_FAILS.length; }
+  /* ==================== 定时关闭 ==================== */
+  // 替代原来的「每日学习时长上限」:不统计时长,只按用户设定的时刻到点停止挂机。
+  // 用轮询而不是一次性 setTimeout —— 标签页在后台会被浏览器节流,长定时器醒来可能晚很久;
+  // 轮询时按"上次检查到本次检查之间是否跨过了今天的该时刻"判定,即使被节流也能在下次醒来时补触发。
+  let stopClockTick = null;
+  let stopClockLastTick = Date.now();
+  let stopClockFiredDate = '';
+
+  function parseHHMM(s) {
+    const m = /^(\d{1,2})\s*[:：]\s*(\d{1,2})$/.exec(String(s || '').trim());
+    if (!m) return null;
+    const h = parseInt(m[1], 10), mi = parseInt(m[2], 10);
+    if (!(h >= 0 && h <= 23 && mi >= 0 && mi <= 59)) return null;
+    return { h: h, mi: mi };
+  }
+
+  function stopClockText() {
+    const hm = parseHHMM(CONFIG.stopAtTime);
+    if (!hm) return '未启用';
+    return `${String(hm.h).padStart(2, '0')}:${String(hm.mi).padStart(2, '0')}`;
+  }
+
+  function doScheduledStop() {
+    const now = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+    log(`⏰ 已到定时关闭时间(${stopClockText()},${now}),自动停止挂机`, 'warn');
+    try { PAUSED = true; } catch (e) { /* ignore */ }
+    try { if (typeof setStatus === 'function') setStatus('已暂停'); } catch (e) { /* ignore */ }
+    try { if (typeof pausePageMedia === 'function') pausePageMedia(); } catch (e) { /* ignore */ }
+    try { if (typeof stopWatching === 'function') stopWatching(); } catch (e) { /* ignore */ }
+  }
+
+  function applyStopClock() {
+    if (stopClockTick) { clearInterval(stopClockTick); stopClockTick = null; }
+    stopClockLastTick = Date.now();
+    const hm = parseHHMM(CONFIG.stopAtTime);
+    if (!hm) return;
+    log(`⏰ 已启用定时关闭:每天 ${stopClockText()} 自动停止挂机(要改时间请点 ⚙)`, 'ok');
+    stopClockTick = setInterval(() => {
+      const cur = parseHHMM(CONFIG.stopAtTime);
+      if (!cur) return;
+      const now = Date.now();
+      const from = stopClockLastTick;
+      stopClockLastTick = now;
+      // 检查 [上次检查, 本次检查] 区间内是否跨过了今天(或昨天,跨夜补判)的该时刻
+      const hit = (function () {
+        const d = new Date();
+        const tToday = new Date(d.getFullYear(), d.getMonth(), d.getDate(), cur.h, cur.mi, 0, 0).getTime();
+        const tYest = tToday - 86400000;
+        if (from < tToday && tToday <= now) return tToday;
+        if (from < tYest && tYest <= now) return tYest;
+        return 0;
+      })();
+      if (!hit) return;
+      const key = new Date(hit).toDateString();
+      if (stopClockFiredDate === key) return;   // 同一天只停一次
+      stopClockFiredDate = key;
+      doScheduledStop();
+    }, 20000);
   }
   /* ==================== 工具函数 ==================== */
   const sleep = (s) => new Promise((r) => setTimeout(r, s * 1000));
@@ -213,36 +355,18 @@
   /* ==================== 日志面板 ==================== */
   let logPanel = null;
   let logLines = [];
-  // 运行时长按"实际工作中"累计:暂停时把已跑时长结算进 elapsedMs,恢复后从新起点计,
-  // startedAt 那套"上线时间戳"永远不减,暂停也在涨
-  const STATS = { answered: 0, jobsDone: 0, jobsTotal: 0, elapsedMs: 0, runSince: null };
+  // 统计只保留任务点进度与已答题数(运行时长统计已移除)
+  const STATS = { answered: 0, jobsDone: 0, jobsTotal: 0 };
 
   function escHtml(s) {
     return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
-  function fmtDur(ms) {
-    const s = Math.max(0, Math.floor(ms / 1000));
-    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = s % 60;
-    const p = (n) => String(n).padStart(2, '0');
-    return h ? `${h}:${p(m)}:${p(ss)}` : `${p(m)}:${p(ss)}`;
-  }
 
-  let lastStatusText = '';
   function setStatus(text) {
     const el = document.getElementById('cxStatus');
     if (el) {
       el.innerHTML = '<i></i>' + escHtml(text);
       el.className = 'cx-pill ' + (text === '工作中' ? 'run' : text === '已暂停' ? 'pause' : text === '出错' ? 'err' : 'idle');
-    }
-    // 计时钟:只在状态真正切换时启停,重复 setStatus('工作中') 不会把累计时长清零
-    if (text !== lastStatusText) {
-      if (text === '工作中') {
-        if (!STATS.runSince) STATS.runSince = Date.now();
-      } else if (STATS.runSince) {
-        STATS.elapsedMs += Date.now() - STATS.runSince;
-        STATS.runSince = null;
-      }
-      lastStatusText = text;
     }
     // 状态文字右侧按钮:工作中(未暂停)→ 停止;待机/已暂停 → 开始
     const btn = document.getElementById('cxRunBtn');
@@ -292,11 +416,13 @@
       status: statusEl ? statusEl.textContent : '',
       config: {
         speed: CONFIG.speed, aiEnabled: CONFIG.aiEnabled, aiModel: CONFIG.aiModel,
-        useTiku: CONFIG.useTiku, dailyLimitMinutes: CONFIG.dailyLimitMinutes,
+        useTiku: CONFIG.useTiku, stopAtTime: CONFIG.stopAtTime,
         autoSubmit: CONFIG.autoSubmit, autoJump: CONFIG.autoJump,
+        accCheckEnabled: CONFIG.accCheckEnabled,
         minAccuracy: CONFIG.minAccuracy, deliberateErrorRate: CONFIG.deliberateErrorRate,
         answerIntervalMin: CONFIG.answerIntervalMin, submitDelayMin: CONFIG.submitDelayMin
       },
+      submitFails: SUBMIT_FAILS.slice(-20).map((it) => ({ chapter: it.chapter, node: it.node, reason: it.reason })),
       video: v ? {
         cur: Math.round(v.currentTime), dur: Math.round(v.duration) || null,
         rate: v.playbackRate, paused: v.paused, muted: v.muted
@@ -396,7 +522,7 @@
       '<div id="cxStats">' +
         '<div class="cell"><b id="cxStatJobs">—</b><span>任务点</span></div>' +
         '<div class="cell"><b id="cxStatAns">0</b><span>已答题</span></div>' +
-        '<div class="cell"><b id="cxStatTime">—</b><span>运行时长</span></div>' +
+        '<div class="cell cxClick" id="cxFailCell" title="点击查看未成功提交的任务点(章节/节点/原因)"><b id="cxStatFail">0</b><span>未提交 ›</span></div>' +
       '</div>' +
       '<div id="cxLogs"></div>';
     const style = document.createElement('style');
@@ -423,6 +549,11 @@
       '#cxStats .cell{flex:1;display:flex;flex-direction:column;align-items:center;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:5px 2px 4px}' +
       '#cxStats .cell b{font-size:14px;font-weight:700;color:#fafafa;font-variant-numeric:tabular-nums;line-height:1.3;letter-spacing:0.3px}' +
       '#cxStats .cell span{font-size:10px;color:#7d7d86;line-height:1.3}' +
+      '#cxStats .cell.cxClick{cursor:pointer;transition:all .15s}' +
+      '#cxStats .cell.cxClick:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.3)}' +
+      '#cxStats .cell.has{border-color:rgba(255,255,255,0.45);background:rgba(255,255,255,0.09)}' +
+      '#cxStats .cell.has b{color:#fff}' +
+      '#cxStats .cell.has span{color:#d4d4d8}' +
       '#cxLogs{padding:2px 12px 10px;overflow-y:auto;max-height:236px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.25) transparent}' +
       '#cxLogs::-webkit-scrollbar{width:5px}' +
       '#cxLogs::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.22);border-radius:3px}' +
@@ -461,6 +592,7 @@
     document.head.appendChild(style);
     document.body.appendChild(logPanel);
     log('刷课助手 v' + scriptVersion() + ' 已加载(看这一行确认版本)');
+    applyStopClock();   // 启用「定时关闭」(未设置则什么都不做)
     document.getElementById('cxCfgBtn').addEventListener('click', showConfigUI);
     document.getElementById('cxRunBtn').addEventListener('click', togglePause);
     // 展开/收起日志(小按钮,表头其余区域留给拖拽)
@@ -500,18 +632,63 @@
       logLines.push({ line: '🤖 自动做题:请点 ⚙ → 勾选 AI 答题并填写 DeepSeek API Key', level: 'warn' });
     }
     renderLogs();
-    // 统计栏每秒刷新(任务点进度 / 已答题数 / 运行时长)
+    // 统计栏每秒刷新(任务点进度 / 已答题数 / 未提交任务点数)
     setInterval(() => {
       const j = document.getElementById('cxStatJobs');
       const a = document.getElementById('cxStatAns');
-      const t = document.getElementById('cxStatTime');
+      const f = document.getElementById('cxStatFail');
+      const fc = document.getElementById('cxFailCell');
       if (j) j.textContent = STATS.jobsTotal ? (STATS.jobsDone + '/' + STATS.jobsTotal) : '—';
       if (a) a.textContent = String(STATS.answered);
-      if (t) {
-        const live = STATS.elapsedMs + (STATS.runSince ? Date.now() - STATS.runSince : 0);
-        t.textContent = (STATS.runSince || STATS.elapsedMs) ? fmtDur(live) : '—';
-      }
+      if (f) f.textContent = String(submitFailCount());
+      if (fc) fc.classList.toggle('has', submitFailCount() > 0);
     }, 1000);
+    // 点「未提交」格:把未成功提交的任务点列到日志区(单列一栏,便于直接定位章节/节点)
+    document.getElementById('cxFailCell').addEventListener('click', showSubmitFails);
+    // 启动时若已有未提交记录,提醒一次
+    if (submitFailCount() > 0) {
+      log(`📕 有 ${submitFailCount()} 个任务点未成功提交(点统计栏「未提交」查看章节与原因)`, 'warn');
+    }
+  }
+
+  // 未成功提交的任务点清单:不塞进普通日志(会被后续日志冲走),单独渲染
+  function showSubmitFails() {
+    initPanel();
+    const logsEl = document.getElementById('cxLogs');
+    if (!logsEl) return;
+    const list = SUBMIT_FAILS.slice(-30);
+    if (!list.length) {
+      logsEl.innerHTML = '<div class="ok"><span class="m">✅ 没有未成功提交的任务点</span></div>';
+      return;
+    }
+    const fmtTime = (t) => {
+      try { return new Date(t).toLocaleString('zh-CN', { hour12: false }); } catch (e) { return String(t); }
+    };
+    logsEl.innerHTML =
+      '<div class="warn"><span class="m">📕 未成功提交的任务点(共 ' + submitFailCount() + ' 条,最新在前)</span></div>' +
+      list.slice().reverse().map((it) =>
+        '<div class="err"><span class="m">' + escHtml(fmtTime(it.t)) + ' · ' +
+        escHtml(it.chapter || '(未知章节)') + ' / ' + escHtml(it.node || '(未知节点)') +
+        '<br>原因:' + escHtml(it.reason || '未知') + '</span></div>'
+      ).join('') +
+      '<div class="ok"><span class="m">点日志区右上「▼」返回运行日志;清空请点下方按钮</span></div>' +
+      '<div style="display:flex;gap:8px;margin:6px 0"><button id="cxFailCopy" type="button" style="flex:1;cursor:pointer;background:rgba(255,255,255,0.1);color:#fafafa;border:1px solid rgba(255,255,255,0.25);border-radius:6px;padding:5px 8px;font:12px inherit">复制清单</button>' +
+      '<button id="cxFailClear" type="button" style="flex:1;cursor:pointer;background:rgba(255,255,255,0.1);color:#fafafa;border:1px solid rgba(255,255,255,0.25);border-radius:6px;padding:5px 8px;font:12px inherit">清空记录</button></div>';
+    const copyBtn = document.getElementById('cxFailCopy');
+    if (copyBtn) copyBtn.addEventListener('click', () => {
+      const txt = SUBMIT_FAILS.map((it) => `${fmtTime(it.t)} | ${it.chapter} | ${it.node} | ${it.reason} | ${it.href || ''}`).join('\n');
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(txt).then(() => log('📕 未提交清单已复制', 'ok')).catch(() => showExportBox(txt));
+        } else showExportBox(txt);
+      } catch (e) { showExportBox(txt); }
+    });
+    const clearBtn = document.getElementById('cxFailClear');
+    if (clearBtn) clearBtn.addEventListener('click', () => {
+      clearSubmitFails();
+      log('📕 未提交记录已清空', 'ok');
+      renderLogs();
+    });
   }
 
   // 立即暂停:把当前页面(含同源 iframe)里正在播的视频/音频真正停住。
@@ -577,9 +754,9 @@
       '<div class="field"><div class="row"><div class="label">🎬 视频倍速</div></div>' +
         '<input id="cfgSpeed" type="number" step="0.25" min="1" max="2" value="' + CONFIG.speed + '">' +
         '<div class="hint">默认 2x(最快);1 = 原速最安全,2x 被检测风险最高,自行权衡</div></div>' +
-      '<div class="field"><div class="row"><div class="label">⏱ 每日刷课上限(分钟)</div></div>' +
-        '<input id="cfgDaily" type="number" step="30" min="0" max="1440" value="' + CONFIG.dailyLimitMinutes + '">' +
-        '<div class="hint">0 = 不限时长(当前默认);设正数则刷满该时长自动停止,第二天恢复。防"一天刷完"的异常曲线时可设 240</div></div>' +
+      '<div class="field"><div class="row"><div class="label">⏰ 定时关闭</div></div>' +
+        '<input id="cfgStopAt" type="text" placeholder="23:30" value="' + escHtml(CONFIG.stopAtTime || '') + '">' +
+        '<div class="hint">填 HH:MM(如 23:30)= 每天到点自动停止挂机;留空 = 不关闭。比"每天刷够多少分钟"更可控:不影响白天效率,也不怕半夜跑飞</div></div>' +
       '<div class="sec">🤖 AI 答题 · 网页版(免 Key,优先)</div>' +
       '<div class="field"><div class="row"><div class="label">🌐 网页 AI 答题</div>' +
         '<input id="cfgWebAI" type="checkbox" ' + (CONFIG.webAiEnabled ? 'checked' : '') + '></div>' +
@@ -624,13 +801,26 @@
         '<div class="hint">拟人化:真人不会全对。填 8 = 8% 概率故意答错(判断题反着点、单选题点错项);填 0 关闭;多选不受影响</div></div>' +
       '<div class="field"><div class="row"><div class="label">📤 自动提交测验</div>' +
         '<input id="cfgSubmit" type="checkbox" ' + (CONFIG.autoSubmit ? 'checked' : '') + '></div>' +
-        '<div class="row" style="margin-top:8px"><div class="label" style="font-size:12px;font-weight:400">正确率达到多少才提交(%)</div></div>' +
-        '<input id="cfgAccuracy" type="number" step="5" min="0" max="100" style="width:120px" value="' + Math.round(CONFIG.minAccuracy * 100) + '">' +
-        '<div class="hint">默认 60:整卷答对率 ≥ 该值才自动交卷(当前 ' + Math.round(CONFIG.minAccuracy * 100) + '%);低于则暂存不交(不乱交卷),可回该章重做。填 0 = 不看正确率(答完就交),填 100 = 全对才交</div></div>' +
+        '<div class="row" style="margin-top:8px"><div class="label" style="font-size:12px;font-weight:400">填充率需达到(固定 100%,不可改)</div></div>' +
+        '<input id="cfgAccuracy" type="text" value="100%" readonly disabled style="width:120px;opacity:0.6;cursor:not-allowed">' +
+        '<div class="hint">填充率 = 已填上答案的题数 / 总题数。固定 100%:只要有一题没填上答案就不交卷(空题必错,交白卷最亏);把漏填的任务点记进「未提交」栏,手动补完再交</div></div>' +
+      '<div class="sec">🎯 提交后准确率检测</div>' +
+      '<div class="field"><div class="row"><div class="label">📊 检测准确率</div>' +
+        '<input id="cfgAccCheck" type="checkbox" ' + (CONFIG.accCheckEnabled ? 'checked' : '') + '></div>' +
+        '<div class="hint">只对「可重复提交」的任务点生效(有重做/再考一次入口的节点)。提交后先查有没有错题:没有 = 全对,直接进下一个节点;有 → 只把判错的题单独重问 AI(其余题不动),写入错题本后点「重做」。不可重复提交的节点提交后不再检测(改了也交不上去)</div></div>' +
+      '<div class="field"><div class="row"><div class="label">📕 有错题就修</div>' +
+        '<input id="cfgAccFixAll" type="checkbox" ' + (CONFIG.accFixAllWrong !== false ? 'checked' : '') + '></div>' +
+        '<div class="hint">开(默认):只要结果页有错题就重问并重做,哪怕整体准确率已经达标(追求全对)。关:只按下面的阈值判,准确率达标就算过,剩余错题不处理</div></div>' +
+      '<div class="field"><div class="row"><div class="label">🎯 准确率阈值(%)</div></div>' +
+        '<input id="cfgMinAcc" type="number" step="5" min="0" max="100" style="width:120px" value="' + Math.round((CONFIG.minAccuracy || 0) * 100) + '">' +
+        '<div class="hint">当前 ' + Math.round((CONFIG.minAccuracy || 0) * 100) + '%:关掉「有错题就修」时才生效 —— 准确率 ≥ 该值直接进下一节点;低于则把错题单独再问一遍 AI 并点「重做」。仅对可重复提交的节点生效。默认 90</div></div>' +
+      '<div class="field"><div class="row"><div class="label">🔁 最多自动重做(次)</div></div>' +
+        '<input id="cfgAccRedoMax" type="number" step="1" min="1" max="5" style="width:120px" value="' + (CONFIG.accRedoMax || 2) + '">' +
+        '<div class="hint">同一节点最多自动重做几次(默认 2)。到上限就不再重做,记进「未提交」栏等人工处理,避免"重做→又没过→再重做"死循环</div></div>' +
       '<div class="sec">🔧 其他</div>' +
       '<div class="field"><div class="row"><div class="label">📖 自动切章</div>' +
         '<input id="cfgJump" type="checkbox" ' + (CONFIG.autoJump ? 'checked' : '') + '></div>' +
-        '<div class="hint">本章任务点全部完成后,自动进入下一章继续刷</div></div>' +
+        '<div class="hint">本章任务点全部完成后,自动进入下一章继续刷。切换时会确认页面真的换了章节(章节名或卡片地址变化),没换就重试最多 3 次;3 次都失败说明按钮无效或已是最后一章,会停下来而不是在原地反复扫描</div></div>' +
       '<div class="field"><div class="row"><div class="label">📡 状态上报(调试用)</div></div>' +
         '<input id="cfgReport" type="text" placeholder="http://127.0.0.1:8790/report" value="' + CONFIG.reportUrl + '">' +
         '<div class="hint">留空 = 关闭。填入本机监听地址后,脚本会把当前页面状态(视频进度/任务点/题目容器/最近日志)定时推过去,方便本机程序或 AI 直接读真实状态。只发往你自己填的地址,不经过任何第三方服务器</div></div>' +
@@ -652,35 +842,75 @@
       CONFIG.webAiBatch = document.getElementById('cfgWebAiBatch').checked;
       CONFIG.webAiUrl = document.getElementById('cfgWebAiUrl').value.trim() || 'https://chat.deepseek.com/';
       CONFIG.deliberateErrorRate = (parseFloat(document.getElementById('cfgErrRate').value) || 0) / 100;
-      CONFIG.dailyLimitMinutes = parseFloat(document.getElementById('cfgDaily').value) || 0;
       CONFIG.autoSubmit = document.getElementById('cfgSubmit').checked;
-      // 提交阈值:0~100(%)→ 0~1,留空或非法值回落到 60%
+      // 定时关闭:HH:MM,填空 = 不关闭;格式非法则回滚到旧值并提示
       {
-        const accEl = document.getElementById('cfgAccuracy');
-        let pct = parseFloat(accEl && accEl.value);
-        if (!isFinite(pct)) pct = 60;
+        const stopEl = document.getElementById('cfgStopAt');
+        const raw = stopEl ? stopEl.value.trim() : '';
+        if (!raw) {
+          CONFIG.stopAtTime = '';
+        } else if (parseHHMM(raw)) {
+          const hm = parseHHMM(raw);
+          CONFIG.stopAtTime = String(hm.h).padStart(2, '0') + ':' + String(hm.mi).padStart(2, '0');
+          if (stopEl) stopEl.value = CONFIG.stopAtTime;
+        } else {
+          log('⏰ 定时关闭时间格式不对(要 HH:MM,如 23:30),本次未修改该设置', 'warn');
+          if (stopEl) stopEl.value = CONFIG.stopAtTime || '';
+        }
+      }
+      // 填充率固定 100%(面板输入框只读),这里不需要读取
+      // 提交后准确率检测
+      CONFIG.accCheckEnabled = document.getElementById('cfgAccCheck').checked;
+      {
+        const fixEl = document.getElementById('cfgAccFixAll');
+        CONFIG.accFixAllWrong = fixEl ? fixEl.checked : true;
+        const redoEl = document.getElementById('cfgAccRedoMax');
+        let rd = parseInt(redoEl && redoEl.value, 10);
+        if (!isFinite(rd)) rd = 2;
+        rd = Math.max(1, Math.min(5, rd));
+        CONFIG.accRedoMax = rd;
+        if (redoEl) redoEl.value = rd;
+        const minEl = document.getElementById('cfgMinAcc');
+        let pct = parseFloat(minEl && minEl.value);
+        if (!isFinite(pct)) pct = 90;
         pct = Math.max(0, Math.min(100, pct));
         CONFIG.minAccuracy = pct / 100;
-        if (accEl) accEl.value = pct;
+        if (minEl) minEl.value = pct;
       }
       CONFIG.autoJump = document.getElementById('cfgJump').checked;
       CONFIG.reportUrl = document.getElementById('cfgReport').value.trim();
       saveConfig(CONFIG);
+      applyStopClock();   // 定时关闭改动立即生效(不用刷新页面)
       log('配置已保存(倍速 ' + CONFIG.speed + 'x, AI ' + (CONFIG.aiEnabled ? '开' : '关') +
-        ', 自动提交 ' + (CONFIG.autoSubmit ? '正确率 ≥ ' + Math.round(CONFIG.minAccuracy * 100) + '%' : '关') + ')', 'ok');
+        ', 自动提交 ' + (CONFIG.autoSubmit ? '填充率 100%' : '关') +
+        ', 准确率检测 ' + (!CONFIG.accCheckEnabled ? '关'
+          : (CONFIG.accFixAllWrong !== false ? '有错题就修' : '≥ ' + Math.round(CONFIG.minAccuracy * 100) + '%') +
+            ',最多重做 ' + (CONFIG.accRedoMax || 2) + ' 次') +
+        ', 定时关闭 ' + stopClockText() + ')', 'ok');
       panel.remove();
     });
     document.getElementById('cfgClose').addEventListener('click', () => panel.remove());
-    // 自动提交开关联动:关闭时正确率输入框置灰(表示不再参与判定)
+    // 自动提交开关联动:关闭时填充率说明置灰(表示不再参与判定)
     (function bindSubmitToggle() {
       const subEl = document.getElementById('cfgSubmit');
       const accEl = document.getElementById('cfgAccuracy');
       if (!subEl || !accEl) return;
       const sync = () => {
-        accEl.disabled = !subEl.checked;
-        accEl.style.opacity = subEl.checked ? '1' : '0.45';
+        accEl.style.opacity = subEl.checked ? '1' : '0.4';
       };
       subEl.addEventListener('change', sync);
+      sync();
+    })();
+    // 准确率检测开关联动:关闭时阈值输入置灰
+    (function bindAccToggle() {
+      const chk = document.getElementById('cfgAccCheck');
+      const minEl = document.getElementById('cfgMinAcc');
+      if (!chk || !minEl) return;
+      const sync = () => {
+        minEl.disabled = !chk.checked;
+        minEl.style.opacity = chk.checked ? '1' : '0.45';
+      };
+      chk.addEventListener('change', sync);
       sync();
     })();
     document.getElementById('cfgExport').addEventListener('click', exportQuestions);
@@ -787,7 +1017,7 @@
   let aiFailCount = 0;
   let aiCooldownUntil = 0;
   let aiCooldownWarned = false;
-  function channelAI(q) {
+  function channelAI(q, hint) {
     return new Promise((resolve) => {
       if (Date.now() < aiCooldownUntil) {
         if (!aiCooldownWarned) {
@@ -797,7 +1027,7 @@
         resolve({ form: 'AI(冷却中)', answer: [] });
         return;
       }
-      const prompt = buildAIPrompt(q);
+      const prompt = hint ? buildAIPrompt(q) + `\n\n注意:${hint}` : buildAIPrompt(q);
       const data = JSON.stringify({
         model: CONFIG.aiModel,
         messages: [
@@ -959,7 +1189,8 @@
     });
   }
 
-  function buildAskText(q) {
+  // hint:错题重问时追加的"上次这么答被判错了"提示,帮 AI 换思路而不是重复同一个错答案
+  function buildAskText(q, hint) {
     const typeName = ({ '0': '单选题', '1': '多选题', '2': '填空题', '3': '判断题' })[String(q.type)] || '简答题';
     const opts = (q.options || []).map((o, i) => `${String.fromCharCode(65 + i)}. ${o}`).join('\n');
     return [
@@ -968,7 +1199,8 @@
       `题目:${q.question}`,
       opts ? `选项:\n${opts}` : '',
       '',
-      '答案格式:单选题写字母(如 C);多选题写字母组合(如 ABD);判断题写「正确」或「错误」;填空题多个空用 | 分隔。'
+      '答案格式:单选题写字母(如 C);多选题写字母组合(如 ABD);判断题写「正确」或「错误」;填空题多个空用 | 分隔。',
+      hint ? `\n注意:${hint}` : ''
     ].filter(Boolean).join('\n');
   }
 
@@ -1110,21 +1342,29 @@
       } catch (e) { /* 网络抖动,继续轮询 */ }
     }
     // 超时:查一次状态,把"谁没干活"说清楚
-    let hint = '请打开网页 AI 地址并保持开着';
+    // 注意 sites 是 [{host,ver,tick}] 对象数组,不能用 indexOf(字符串) 判在线(恒 -1,分支永远进不去)
+    let hint = `请打开 ${site || '网页 AI 地址'} 并保持标签页开着`;
     try {
       const st = JSON.parse(await cxFetch(base + '/api/webai/status', { timeout: 6000 }));
-      if (st.sites && st.sites.indexOf(site) >= 0) {
-        hint = '网页 AI 页已连上但没回复 —— 到 AI 页看看它是否回答卡住';
+      const sites = Array.isArray(st.sites) ? st.sites : [];
+      const mine = sites.find((s) => s && s.host === site);
+      if (mine) {
+        hint = `网页 AI 页已连上(${site})但没回复 —— 到 AI 页看看是不是回答卡住/还在生成`;
+      } else if (sites.length) {
+        hint = `中转里在线的是 ${sites.map((s) => s.host).join(' / ')},不是当前配置的 ${site}` +
+          ' —— 把面板里的「网页 AI 地址」改成在线的那个站点,或打开当前站点并登录';
       } else if (st.bridgeOnline) {
         hint = '检测到旧版桥在轮询 —— 请重装「网页 AI 桥」(v1.0.6+)并刷新 AI 页面';
+      } else {
+        hint = `没有任何在线桥 —— 请打开 ${site} 页面并登录,确认装了「网页 AI 桥」且标签页没关`;
       }
     } catch (e) { /* ignore */ }
     return { ok: true, result: { text: '', error: `等待网页 AI 回复超时(${Math.round(timeoutMs / 1000)}s):` + hint } };
   }
 
-  async function channelWebAI(q) {
+  async function channelWebAI(q, hint) {
     const timeout = (CONFIG.webAiTimeout || 60) * 1000;
-    const r = await askWebAI(buildAskText(q), timeout);
+    const r = await askWebAI(buildAskText(q, hint), timeout);
     if (r.error) { log('网页 AI: ' + r.error, 'warn'); return { form: '网页AI', answer: [] }; }
     const raw = String(r.text || '').trim();
     if (!raw) { log('网页 AI 返回内容为空', 'warn'); return { form: '网页AI', answer: [] }; }
@@ -1207,24 +1447,38 @@
   }
 
   let aiKeyWarned = false;
-  async function getAnswers(q) {
+  // hint:可选,错题重问时把"上次判错的答案"带进去让 AI 换思路
+  async function getAnswers(q, hint) {
+    // 错题本优先:之前被判错、随后重问 AI 或从结果页取到正确答案的题,重做时直接用修正答案
+    if (!hint) {
+      const fixed = lookupFix(q.question);
+      if (fixed && fixed.length) {
+        STATS.answered++;
+        log(`[错题本] 命中修正答案: ${fixed.join(' / ')}`, 'ok');
+        return fixed;
+      }
+    }
+    // 通道按优先级顺序尝试,任一通道拿到答案即返回。
+    // 原实现是 if/else if 二选一:开了网页 AI 就再不会走 API 通道,网页 AI 一挂就整卷无答案。
     if (CONFIG.webAiEnabled) {
-      const r = await channelWebAI(q);
+      const r = await channelWebAI(q, hint);
       const ans = filterAnswers(r.answer);
       if (ans.length) {
         STATS.answered++;
         log(`[${r.form}] 查到答案: ${ans.join(' / ')}`, 'ok');
         return ans;
       }
-    } else if (CONFIG.aiEnabled && CONFIG.aiKey) {
-      const r = await channelAI(q);
+      if (CONFIG.aiEnabled && CONFIG.aiKey) log('网页 AI 没给出答案,回退到 API 通道再问一次', 'warn');
+    }
+    if (CONFIG.aiEnabled && CONFIG.aiKey) {
+      const r = await channelAI(q, hint);
       const ans = filterAnswers(r.answer);
       if (ans.length) {
         STATS.answered++;
         log(`[AI] 查到答案: ${ans.join(' / ')}`, 'ok');
         return ans;
       }
-    } else if (!aiKeyWarned) {
+    } else if (!CONFIG.webAiEnabled && !aiKeyWarned) {
       aiKeyWarned = true;
       log('⚠ 未启用 AI 答题:点面板 ⚙ → 勾选「网页 AI 答题」或「AI 答题」并配置,否则无法自动做题', 'warn');
     }
@@ -1240,7 +1494,7 @@
       }
     }
     const reason = CONFIG.webAiEnabled
-      ? '(原因:网页 AI 没返回答案 —— 检查 AI 页面是否打开、是否装了「网页AI桥」)'
+      ? '(原因:网页 AI 和 API 都没返回答案 —— 检查 AI 页面是否打开、是否装了「网页AI桥」)'
       : (!CONFIG.aiEnabled || !CONFIG.aiKey) ? '(原因:AI 答题未启用,请点 ⚙ 配置)' : '';
     log('未查到答案' + reason, 'warn');
     return [];
@@ -1272,10 +1526,28 @@
   }
 
   // 清空当前已勾选的选项(重做时避免旧答案残留叠加)
+  // 必须连「答案隐藏域 + check_answer 选中标记」一起清:
+  // 只清真控件时,重做场景里残留的 answer<qid>/check_answer 会让 choicePicked 误判
+  // 「这题已经选好了」而跳过点击,旧式 checkbox 页面就一直是空勾状态。
   function clearCurrent(el) {
+    // 真控件直接改 checked,不要 click:老式页面的 click 处理器是 toggle 语义
+    // (inp.checked = !inp.checked),点一下会被它自己翻回去,清不干净。
     el.querySelectorAll('input[type=radio], input[type=checkbox]').forEach((inp) => {
-      if (inp.checked) { try { inp.click(); } catch (e) { /* ignore */ } }
+      try { if (inp.checked) inp.checked = false; } catch (e) { /* ignore */ }
     });
+    try {
+      const doc = el.ownerDocument || document;
+      const qids = new Set();
+      el.querySelectorAll('li[qid]').forEach((n) => qids.add(n.getAttribute('qid')));
+      qids.forEach((qid) => {
+        if (!qid) return;
+        const hid = doc.getElementById('answer' + qid);
+        if (hid) hid.value = '';
+      });
+    } catch (e) { /* ignore */ }
+    try {
+      el.querySelectorAll('.check_answer').forEach((n) => { n.classList.remove('check_answer'); });
+    } catch (e) { /* ignore */ }
   }
 
   /* ==================== 网页 AI 启动关卡 ==================== */
@@ -1460,24 +1732,6 @@
     log(`🔓 字体解密完成,还原 ${resolved.size}/${tHashes.size} 个字符(仅用于发题,页面显示不受影响)`, 'ok');
     return true;
   }
-  /* ==================== 每日刷课时长统计(纪律) ==================== */
-  function getTodayStats() {
-    try {
-      const s = (typeof GM_getValue !== 'undefined')
-        ? GM_getValue('cxDaily', null)
-        : JSON.parse(localStorage.getItem('cxDaily') || 'null');
-      const today = new Date().toDateString();
-      if (s && s.date === today) return s;
-      return { date: today, minutes: 0 };
-    } catch (e) { return { date: new Date().toDateString(), minutes: 0 }; }
-  }
-  function saveTodayStats(s) {
-    try {
-      if (typeof GM_setValue !== 'undefined') GM_setValue('cxDaily', s);
-      else localStorage.setItem('cxDaily', JSON.stringify(s));
-    } catch (e) { /* ignore */ }
-  }
-  let dailyLimitReached = false;
   /* ==================== 自动更新检测(仅在远端版本更高时刷新) ==================== */
   function verParts(v) {
     return String(v || '0').split(/[.\-+]/).map((x) => parseInt(x, 10) || 0);
@@ -2587,16 +2841,6 @@
   }
   /* ==================== 任务点处理 ==================== */
   async function videoTask(iframe, outerWin) {
-    // 每日时长上限检查
-    if (CONFIG.dailyLimitMinutes > 0) {
-      const st = getTodayStats();
-      if (st.minutes >= CONFIG.dailyLimitMinutes) {
-        dailyLimitReached = true;
-        log(`⏹ 今日刷课已达上限 ${CONFIG.dailyLimitMinutes} 分钟,自动停止(明天自动恢复)`, 'warn');
-        return;
-      }
-      log(`⏱ 今日已刷约 ${st.minutes} 分钟 / 上限 ${CONFIG.dailyLimitMinutes} 分钟`);
-    }
     await waitIframeLoaded(iframe, 60000, runAborted);
     const win = iframe.contentWindow;
     const startHref = (function () { try { return win.location.href; } catch (e) { return ''; } })();
@@ -2664,16 +2908,6 @@
       }, 2000);
       try { player.on('ended', () => { log('视频播放结束', 'ok'); finish(); }); } catch (e) { /* ignore */ }
     });
-    // 累加今日刷课时长(按视频实际时长折算)
-    try {
-      const dur = typeof player.duration === 'function' ? player.duration() : 0;
-      if (dur > 0) {
-        const st = getTodayStats();
-        st.minutes += Math.round(dur / 60);
-        saveTodayStats(st);
-        log(`⏱ 今日累计刷课约 ${st.minutes} 分钟`, 'info');
-      }
-    } catch (e) { /* ignore */ }
     log('✓ 视频任务完成');
   }
 
@@ -2836,13 +3070,50 @@
       log(`第 ${i + 1}/${tasks.length} 题(类型 ${q.type}) ${ok ? '✓ 已作答' : '✗ ' + fail}`, ok ? 'ok' : 'warn');
     }
     if (pausedMid) { log('⏸ 暂停中断:本题库不自动提交,已答内容保留在页面上', 'warn'); return; }
-    const accuracy = tasks.length ? okCount / tasks.length : 0;
-    // 阈值按"面板上显示的百分比"比较,避免 65.9% 显示成 66% 却因实际值不足 66% 而不交的困惑
-    const accPct = Math.round(accuracy * 100);
-    const needPct = Math.round((CONFIG.minAccuracy || 0) * 100);
-    if (CONFIG.autoSubmit && accPct >= needPct) {
+    // 填充率 = 成功填上答案的题数 / 总题数(不是准确率:对错要等平台判分才知道)
+    // 固定要求 100%:只要有一题没填上答案就不交卷,避免交半张卷被判错
+    const fillPct = tasks.length ? Math.round((okCount / tasks.length) * 100) : 0;
+    const missing = tasks.length - okCount;
+    if (!CONFIG.autoSubmit) {
+      log(`填充率 ${fillPct}%(${okCount}/${tasks.length}),自动提交已关闭,暂存不提交`, 'warn');
+      try { win.alert = () => {}; if (typeof win.noSubmit === 'function') win.noSubmit(); } catch (e) { /* ignore */ }
+      return;
+    }
+    if (missing > 0) {
+      const reason = `填充率 ${fillPct}%(还有 ${missing}/${tasks.length} 题没填上答案)`;
+      log(`⛔ ${reason},按规则不提交(填充率必须 100%)`, 'warn');
+      recordSubmitFail({ chapter: curChapterName, node: curNodeName, reason });
+      try { win.alert = () => {}; if (typeof win.noSubmit === 'function') win.noSubmit(); } catch (e) { /* ignore */ }
+      return;
+    }
+    // 提交前回读:okCount 只统计"调用作答成功",不代表页面真的记录上了答案。
+    // 这里再按页面当前状态逐题确认一遍,漏的补答一次;补完仍漏才放弃提交(避免交半张卷)
+    let replied = countReplied(tasks);
+    if (replied === 0) {
+      log('🔍 提交前回读:页面结构不标准,读不到已作答标记,跳过回读校验直接提交', 'warn');
+    } else if (replied < tasks.length) {
+      log(`🔍 提交前回读:${replied}/${tasks.length} 题确实已填入作答,补答 ${tasks.length - replied} 题...`, 'warn');
+      for (const t of tasks) {
+        if (runAborted()) { log('⏸ 已暂停,本题库不自动提交', 'warn'); return; }
+        if (isAnsweredEl(t.el)) continue;
+        let ans = [];
+        try { ans = await getAnswers(t.q); } catch (e) { ans = []; }
+        if (ans.length && setQuizAnswer(ans, t.q, t.el, win)) log('  补答成功', 'ok');
+        await sleep(0.2);
+      }
+      replied = countReplied(tasks);
+      if (replied < tasks.length) {
+        const reason = `回读校验只确认 ${replied}/${tasks.length} 题已作答(其余题页面没记录选择)`;
+        log(`⛔ ${reason},按规则不提交`, 'warn');
+        recordSubmitFail({ chapter: curChapterName, node: curNodeName, reason });
+        try { win.alert = () => {}; if (typeof win.noSubmit === 'function') win.noSubmit(); } catch (e) { /* ignore */ }
+        return;
+      }
+      log(`✓ 回读校验通过:${replied}/${tasks.length} 题页面均已记录作答`, 'ok');
+    }
+    {
       await randomSleep(CONFIG.submitDelayMin, CONFIG.submitDelayMax);
-      log(`正确率 ${accPct}% ≥ 阈值 ${needPct}%,正在提交...`, 'ok');
+      log(`填充率 100%(${tasks.length}/${tasks.length} 题已作答),正在提交...`, 'ok');
       let submitted = false;
       // 提交入口可能定义在题目窗口,也可能在它的父级页(旧版章节测验把 btnBlueSubmit 挂在父页)
       const chain = [win];
@@ -2868,14 +3139,37 @@
           try { if (typeof w.submitCheckTimes === 'function') { w.submitCheckTimes(); break; } } catch (e) { /* ignore */ }
         }
         log('已触发提交', 'ok');
+        // 校验这一步是不是真的交上去了:没交上去的话,等判分会一直等不到,
+        // 白等 25 秒还会被当成"此节点不支持重复提交",最后错题也没机会修
+        let ack = readSubmitAck(chain);
+        if (ack === 'fail') {
+          log('⚠ 提交后仍停在作答状态(可能弹了确认框没点或按钮无响应),再点一次提交', 'warn');
+          for (const w of chain) {
+            try { if (typeof w.btnBlueSubmit === 'function') { w.btnBlueSubmit(); break; } } catch (e) { /* ignore */ }
+            try { if (typeof w.submitWork === 'function') { w.submitWork(); break; } } catch (e) { /* ignore */ }
+          }
+          if (readSubmitAck(chain) === 'fail') {
+            for (const w of chain) { if (clickButtonByText(w, ['确认提交', '确定', '交卷'])) break; }
+          }
+          await sleep(3);
+          ack = readSubmitAck(chain);
+        }
+        if (ack === 'ok') {
+          log('✓ 提交已确认(页面已进入已提交/结果状态)', 'ok');
+        } else if (ack === 'fail') {
+          log('⛔ 两次提交后页面仍停在作答状态,判定本次没交上去', 'warn');
+          recordSubmitFail({ chapter: curChapterName, node: curNodeName, reason: '点提交后仍停在作答状态(可能需手动点确认弹窗)' });
+          return;
+        } else {
+          log('🔎 没读到明确提交回执,按后续判分结果判断', 'info');
+        }
+        // 提交后准确率检测:只对「可重复提交」的节点生效
+        // 先查有没有错题:没有 = 全对直接过;有 = 只把错题单独重问后点重做
+        await afterSubmitAccuracy(chain, { node: curNodeName || '', tasks });
       } else {
         log('未找到提交入口,请手动提交', 'warn');
+        recordSubmitFail({ chapter: curChapterName, node: curNodeName, reason: '已作答但没找到提交入口(需手动点提交)' });
       }
-    } else {
-      log(CONFIG.autoSubmit
-        ? `正确率 ${accPct}% 低于阈值 ${needPct}%,暂存不提交(可在设置里调整阈值)`
-        : `正确率 ${accPct}%,自动提交已关闭,暂存不提交`, 'warn');
-      try { win.alert = () => {}; if (typeof win.noSubmit === 'function') win.noSubmit(); } catch (e) { /* ignore */ }
     }
   }
 
@@ -2929,6 +3223,455 @@
     }
     log(`作业填写完成(${okCount}/${els.length}),请人工检查后手动提交`);
   }
+  /* ==================== 节点定位(记「未提交」用) ==================== */
+  // 当前章节名与任务点名:让「未提交」栏直接告诉用户是哪一章的哪个节点,不用自己翻
+  let curChapterName = '';
+  let curNodeName = '';
+  function readChapterName() {
+    const sels = ['.posCatalog_select .posCatalog_name', '.posCatalog_select', '#curChapterName',
+      '.prev_white .prev_white_name', '.prev_white', '.chapterName', '.catalog_name'];
+    for (const s of sels) {
+      try {
+        const el = document.querySelector(s);
+        const t = el ? String(el.textContent || '').replace(/\s+/g, ' ').trim() : '';
+        if (t && t.length <= 60) return t;
+      } catch (e) { /* ignore */ }
+    }
+    try { return String(document.title || '').split(/[-_|]/)[0].trim().slice(0, 60); } catch (e) { return ''; }
+  }
+
+  /* ==================== 提交后准确率检测(仅「可重复提交」节点) ==================== */
+  // 对错标记:超星结果页给每题标 dui/cuo(各版本类名有差异),用类名正则一并兜住
+  const RIGHT_CLS = /(^|\s)(dui|right|correct|answerRight|icon-dui|icon-right|is-right)(\s|$)/i;
+  const WRONG_CLS = /(^|\s)(cuo|wrong|error|answerWrong|icon-cuo|icon-wrong|is-wrong)(\s|$)/i;
+
+  // 取文档正文(去掉脚本自己的面板,否则面板日志里的"准确率 xx%"会被当成判分结果)
+  function docPlainText(doc) {
+    try {
+      const clone = doc.body.cloneNode(true);
+      clone.querySelectorAll('#cx-panel, #cxCfgPanel').forEach((n) => n.remove());
+      return String(clone.textContent || '');
+    } catch (e) { return ''; }
+  }
+
+  // 判断单题在结果页被判对还是判错:类名标记 → 分数标签 → 是否展示"正确答案"(只在错题上展示)
+  function judgeItemSide(el) {
+    const all = [el].concat(Array.from(el.querySelectorAll('*')));
+    const clsOf = (n) => {
+      const c = n.className;
+      return String(c && c.baseVal !== undefined ? c.baseVal : (c || ''));
+    };
+    const has = (re) => all.some((n) => re.test(clsOf(n)));
+    if (has(WRONG_CLS)) return 'wrong';
+    if (has(RIGHT_CLS)) return 'right';
+    // 图标字体 / 文字标记(√ ✗ 对 错):有些版本不靠 class 区分,只放一个对勾叉号字符
+    // 同一题可能既标了"我的答案 ✗"又标了"正确答案 √",这时以 ✗ 为准(错题才需要修)
+    try {
+      const cand = Array.from(el.querySelectorAll('i, em, font, b, span, .icon, .mark_answer, .ansIcon'));
+      let sawRight = false;
+      for (const n of cand.slice(0, 14)) {
+        const tx = String(n.textContent || n.getAttribute('title') || n.getAttribute('alt') || '').replace(/\s+/g, '');
+        if (!tx || tx.length > 4) continue;
+        if (/^(×|✗|✘|✕|╳|错|错误|答错)$/.test(tx)) return 'wrong';
+        if (/^(√|✓|✔|对|正确|答对)$/.test(tx)) sawRight = true;
+      }
+      if (sawRight) return 'right';
+    } catch (e) { /* ignore */ }
+    // 分数标签:0 分 = 错,>0 分 = 对(超星结果页 .mark_score / .score 常见)
+    try {
+      const sEl = el.querySelector('.mark_score, .score, .getScore, .questionScore, .question_score, .my_score');
+      if (sEl) {
+        const mm = String(sEl.textContent || '').replace(/\s+/g, '').match(/(\d+(?:\.\d+)?)\s*分/);
+        if (mm) return parseFloat(mm[1]) > 0 ? 'right' : 'wrong';
+      }
+    } catch (e) { /* ignore */ }
+    // 「我的答案 / 你的答案」与「正确答案」都能读到 → 直接比对:一致就对、不一致就错。
+    // 有些版本不给对错图标也不给分数,只把两个答案并排贴出来,只看图标会漏判成"无标记"
+    try {
+      const t = String(el.textContent || '');
+      const mine = (t.match(/(?:我的答案|你的答案|学生答案|所选答案)\s*[:：]\s*([^\n]{1,60})/) || [])[1];
+      const right = (t.match(/(?:正确答案|参考答案)\s*[:：]\s*([^\n]{1,60})/) || [])[1];
+      if (mine && right) {
+        const norm = (s) => String(s).replace(/[\s，,、;；]/g, '').toUpperCase();
+        return norm(mine) === norm(right) ? 'right' : 'wrong';
+      }
+    } catch (e) { /* ignore */ }
+    // "正确答案/参考答案"只在被判错时才展示 → 出现即判错
+    try {
+      const t = String(el.textContent || '');
+      if (/正确答案\s*[:：]/.test(t) || /参考答案\s*[:：]/.test(t)) return 'wrong';
+    } catch (e) { /* ignore */ }
+    return '';
+  }
+
+  // 逐题扫对错标记:total 题数 / right 判对 / wrong 判错
+  // 注意:若每道题都被判成"错"(多半是结果页每题都展示了正确答案),说明标记不可靠,按"无标记"处理
+  function scanQuizMarks(wins) {
+    // 判分页常在多层 iframe 里,而各窗口能匹配到的 DOM 质量差很多(有的窗口会命中一堆 .mark_item
+    // 之类的无关节点却完全判不出对错)。所以不认"第一个有题目的窗口",而是每个窗口都扫,
+    // 挑能判出对错最多的那个 —— 否则可能因为外层窗口的假命中,把整卷错误地读成"读不到判分"
+    let best = { total: 0, right: 0, wrong: 0, unreliable: false };
+    let bestJudged = -1;
+    for (const w of wins) {
+      let doc;
+      try { doc = w.document; } catch (e) { continue; }
+      if (!doc || !doc.body) continue;
+      let items = [];
+      try { items = Array.from(doc.querySelectorAll(QUIZ_ITEM_SEL)); } catch (e) { items = []; }
+      if (!items.length) continue;
+      let right = 0;
+      let wrong = 0;
+      for (const el of items) {
+        const side = judgeItemSide(el);
+        if (side === 'right') right++;
+        else if (side === 'wrong') wrong++;
+      }
+      const judged = right + wrong;
+      if (judged > bestJudged) {
+        bestJudged = judged;
+        best = { total: items.length, right, wrong, unreliable: right === 0 && wrong === items.length };
+      }
+      if (judged === items.length) break;   // 这个窗口整卷都判出来了,不用再看别的
+    }
+    return best;
+  }
+
+  // 读判分结果,第一优先"看有没有错题":
+  // ① 无错题 → 全对(100%),不再纠结百分比
+  // ② 有错题 → 只关心错了几道,准确率按对/错计数算
+  // ③ 页面没给逐题标记 → 回退"正确率 xx%" / 得分÷总分 / 类名计数
+  function readQuizResult(wins) {
+    const marks = scanQuizMarks(wins);
+    // 整卷每道都判成"错":多半是结果页给每道题都贴了正确答案,标记不可靠 → 退回总量/文本判断
+    if (!marks.unreliable && marks.total > 0 && marks.wrong === 0 && marks.right > 0) {
+      return { pct: 100, basis: '无错题(' + marks.right + '/' + marks.total + ' 题判对)', allRight: true, total: marks.total, right: marks.right, wrong: 0 };
+    }
+    if (marks.wrong > 0 && marks.right > 0) {
+      return { pct: Math.round((marks.right / (marks.right + marks.wrong)) * 100), basis: '错 ' + marks.wrong + ' 道/共 ' + marks.total + ' 题', allRight: false, total: marks.total, right: marks.right, wrong: marks.wrong };
+    }
+    if (marks.wrong > 0 && marks.total > 0) {
+      // 只标错、没标对(部分版本只给错题加红标)
+      const rightN = Math.max(0, marks.total - marks.wrong);
+      return { pct: Math.round((rightN / marks.total) * 100), basis: '只标出 ' + marks.wrong + ' 道错题', allRight: false, total: marks.total, right: rightN, wrong: marks.wrong };
+    }
+    for (const w of wins) {
+      let doc;
+      try { doc = w.document; } catch (e) { continue; }
+      if (!doc || !doc.body) continue;
+      const text = docPlainText(doc);
+      let m = text.match(/正确率\s*[:：]?\s*(\d{1,3}(?:\.\d+)?)\s*%/);
+      if (m) return { pct: Math.round(parseFloat(m[1])), basis: '正确率', allRight: false, wrong: -1 };
+      m = text.match(/得分\s*[:：]?\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/);
+      if (m && parseFloat(m[2]) > 0) return { pct: Math.round(parseFloat(m[1]) / parseFloat(m[2]) * 100), basis: '得分/总分', allRight: false, wrong: -1 };
+      m = text.match(/(\d+(?:\.\d+)?)\s*分\s*\/\s*(\d+(?:\.\d+)?)\s*分/);
+      if (m && parseFloat(m[2]) > 0) return { pct: Math.round(parseFloat(m[1]) / parseFloat(m[2]) * 100), basis: '得分/总分', allRight: false, wrong: -1 };
+      let right = 0;
+      let wrong = 0;
+      doc.querySelectorAll(QUIZ_ITEM_SEL).forEach((el) => {
+        const side = judgeItemSide(el);
+        if (side === 'wrong') wrong++;
+        else if (side === 'right') right++;
+      });
+      if (right + wrong > 0) {
+        return { pct: Math.round((right / (right + wrong)) * 100), basis: `对错标记 ${right}/${right + wrong}`, allRight: wrong === 0, right, wrong };
+      }
+    }
+    return null;
+  }
+
+  // 收集判错的题:题干 + 正确答案(结果页有就直接用,比再问一次 AI 更准)
+  function collectWrongQuestions(wins) {
+    const out = [];
+    const seen = {};
+    for (const w of wins) {
+      let doc;
+      try { doc = w.document; } catch (e) { continue; }
+      if (!doc) continue;
+      doc.querySelectorAll(QUIZ_ITEM_SEL).forEach((el) => {
+        if (judgeItemSide(el) !== 'wrong') return;
+        const q = extractWorkQuestion(el) || extractQuizQuestion(el);
+        if (!q || !q.question) return;
+        // 结果页没解析到选项时,错题本仍可用(重做时按题干命中答案),这里不拦
+        const key = fixKey(q.question);
+        if (!key || seen[key]) return;
+        seen[key] = 1;
+        let right = '';
+        try {
+          const rEl = el.querySelector('.rightAnswer, .correctAnswer, .right_answer, .answerRight');
+          if (rEl) right = clean(rEl.textContent || '');
+          if (!right) {
+            const t = String(el.innerText || '');
+            const mm = t.match(/正确答案\s*[:：]?\s*([^\n]{1,60})/) || t.match(/参考答案\s*[:：]?\s*([^\n]{1,60})/);
+            if (mm) right = mm[1].replace(/\s+/g, ' ').trim();
+          }
+        } catch (e) { /* ignore */ }
+        out.push({ q, right });
+      });
+    }
+    return out;
+  }
+
+  // 提交前回读:这题在页面上到底有没有"已作答"的痕迹(计数成功 ≠ 页面真的记录上了)
+  // 判不准时宁可宽松(返回 true),避免因选择器不适配把整卷卡成永不提交
+  function isAnsweredEl(el) {
+    try {
+      if (el.querySelector('input[type=radio]:checked, input[type=checkbox]:checked')) return true;
+      // 选中标记(各版本 class 名不同)
+      if (el.querySelector('.check_answer, .checkAnswer, .cur, .selected, .choiceCheck, .on, .active')) return true;
+      // 填空/简答:输入框里有内容
+      const inputs = Array.from(el.querySelectorAll('textarea, input[type=text], input:not([type])'));
+      if (inputs.length) return inputs.some((n) => String(n.value || '').trim().length > 0);
+      // 页面自带的答案隐藏域(提交时页面读的就是它)
+      const hid = Array.from(el.querySelectorAll('input[name^=answer], input[id^=answer], .answerStr, .answer_str, .answerContent'));
+      if (hid.length) return hid.some((n) => String(n.value !== undefined && n.value !== null ? n.value : n.textContent || '').trim().length > 0);
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+
+  // 数一下"页面上确实已填入作答"的题数
+  function countReplied(tasks) {
+    let n = 0;
+    for (const t of tasks) {
+      try { if (isAnsweredEl(t.el)) n++; } catch (e) { /* ignore */ }
+    }
+    return n;
+  }
+
+  const REDO_TEXTS = ['重做', '再做一次', '重新做', '再次测验', '重考', '再考一次', '重新测验'];
+  // 能否重复提交:结果页/测验页有「重做/再做一次/重考」入口 → 可重复提交;没有 → 不可重复提交
+  function findRedoEntry(wins) {
+    for (const w of wins) {
+      try {
+        const nodes = w.document.querySelectorAll('button, a, .btn, .el-button, .jb_btn, input[type=button], span');
+        for (const n of nodes) {
+          const t = String(n.textContent || n.value || '').replace(/\s+/g, '');
+          if (!t || t.length > 12) continue;
+          if (!REDO_TEXTS.some((k) => t === k || t.includes(k))) continue;
+          // 隐藏的按钮点不动:既有页面会把「重做」先藏着等判分出来再显示,
+          // 也有弹窗里的"请重做"提示文字,点下去只会白跑一轮重做计数
+          try {
+            const cs = w.getComputedStyle(n);
+            if (cs && (cs.display === 'none' || cs.visibility === 'hidden')) continue;
+          } catch (e) { /* ignore */ }
+          // 弹窗里的"未达及格线,请重做"是提示文字不是按钮:弹窗内只认真正的按钮/链接
+          let inPop = false;
+          try { inPop = !!(n.closest && n.closest('.layui-layer, .pop, .popup, .dialog, .modal, .mask_box, .tipBox, .maskDiv, .cu-tip, .ui-dialog')); } catch (e) { inPop = false; }
+          if (inPop && !/^(BUTTON|A|INPUT)$/.test(String(n.tagName || '').toUpperCase())) continue;
+          return { w, el: n };
+        }
+      } catch (e) { /* ignore */ }
+    }
+    return null;
+  }
+
+  // 同一节点自动重做的次数(防死循环:重做→又没过→再重做…)
+  const redoCounts = {};
+
+  // 「未达及格线,请重做」这类判分弹窗:平台用弹窗替代分数页,页面上既没有分数也没有「重做」按钮,
+  // 弹窗还挡着题目区 —— 旧逻辑读不到判分,直接当成"此节点不支持重复提交"放弃,错题永远没机会修。
+  // 另外这句提示本身就是平台在明说"有错题、需要重做",不必再等一个百分比才敢动手。
+  const GATE_RE = /未达|不及格|不达标|未通过|没通过|请重做|需要重做|重新做一遍|再答一次|再次作答|继续努力/;
+  function findGatePopup(wins) {
+    for (const w of wins) {
+      let doc;
+      try { doc = w.document; } catch (e) { continue; }
+      if (!doc || !doc.body) continue;
+      let boxes = [];
+      try {
+        boxes = Array.from(doc.querySelectorAll('.layui-layer, .layui-layer-content, .pop, .popup, .dialog, .modal, .mask_box, .tipBox, .ans-job-pop, .maskDiv, .cu-tip, .ui-dialog'));
+      } catch (e) { boxes = []; }
+      for (const box of boxes) {
+        const t = String(box.textContent || '').replace(/\s+/g, '');
+        if (!t || t.length > 200 || !GATE_RE.test(t)) continue;
+        // 弹窗里的确认键:点掉它,题目区/判分详情才露出来,重做入口也才点得到
+        let okBtn = null;
+        try {
+          const btns = Array.from(box.querySelectorAll('button, a, .btn, .layui-layer-btn0, input[type=button], span'));
+          okBtn = btns.find((n) => /^(确定|确认|知道了|知道了。|关闭|好的|OK)$/i.test(String(n.textContent || n.value || '').replace(/\s+/g, '')));
+        } catch (e) { okBtn = null; }
+        return { w, box, text: t, okBtn: okBtn || null };
+      }
+    }
+    return null;
+  }
+
+  // 关掉弹窗后页面是否直接恢复成"可以再交一次"的状态:
+  // 有些节点的重做不是按钮,而是把题目解锁让人改完再交 —— 此时改完错题重新提交即可
+  function canRetake(wins) {
+    for (const w of wins) {
+      let doc;
+      try { doc = w.document; } catch (e) { continue; }
+      if (!doc || !doc.body) continue;
+      try {
+        const bar = doc.querySelector('.mark_table, .mark_item, .TiMu, .questionLi');
+        if (!bar) continue;
+        const btns = Array.from(doc.querySelectorAll('button, a, .btn, .el-button, .jb_btn, input[type=button]'));
+        const sub = btns.find((b) => /^(提交|交卷|提交作业|提交答案|重新提交)$/.test(String(b.textContent || b.value || '').replace(/\s+/g, '')));
+        if (!sub) continue;
+        const locked = Array.from(doc.querySelectorAll('.TiMu input, .questionLi input, .mark_item input'))
+          .some((n) => n.disabled === false || n.type === 'radio' || n.type === 'checkbox');
+        if (locked) return { w, el: sub };
+      } catch (e) { /* ignore */ }
+    }
+    return null;
+  }
+
+  // 提交回执:点了提交按钮 ≠ 交卷成功(确认弹窗没点、按钮无响应都会静默失败,
+  // 页面还停在作答状态,脚本却以为交上去了,后面就再也等不到判分)
+  // 返回 'ok' 明确已交 / 'fail' 还停在作答状态 / 'unknown' 读不到(交给判分流程兜底)
+  function readSubmitAck(chain) {
+    let sawSubmitBtn = false;
+    let sawAnswerState = false;
+    for (const w of chain) {
+      let doc;
+      try { doc = w.document; } catch (e) { continue; }
+      if (!doc || !doc.body) continue;
+      try {
+        const t = docPlainText(doc).replace(/\s+/g, '');
+        if (/重做|再做一次|重新做|查看结果|查看详情|查看答卷|我的成绩|提交成功|已提交|已交卷|已完成/.test(t)) return 'ok';
+        const btns = Array.from(doc.querySelectorAll('button, a, .btn, .el-button, .jb_btn, input[type=button]'));
+        if (btns.some((b) => /交卷|提交/.test(String(b.textContent || b.value || '')))) sawSubmitBtn = true;
+        if (doc.querySelector(QUIZ_ITEM_SEL)) sawAnswerState = true;
+      } catch (e) { /* ignore */ }
+    }
+    return (sawSubmitBtn && sawAnswerState) ? 'fail' : 'unknown';
+  }
+  // 提交后主流程:等判分 → 先看有没有错题
+  //   · 没有错题 = 全对 → 直接进下一个节点
+  //   · 有错题   → 只把判错的题单独重问(其余题不动),写入错题本后点「重做」
+  async function afterSubmitAccuracy(wins, ctx) {
+    if (!CONFIG.accCheckEnabled) return;
+    const needPct = Math.round((CONFIG.minAccuracy || 0.9) * 100);
+    const fixAllWrong = CONFIG.accFixAllWrong !== false;            // 默认:只要有错题就修,不看整体准确率
+    const redoMax = Math.max(1, Math.min(5, CONFIG.accRedoMax || 2)); // 同一节点最多自动重做几次
+    const node = (ctx && ctx.node) || curNodeName || '当前节点';
+    const nodeKey = curChapterName + '#' + node;
+    let res = null;
+    let redo = null;
+    let gate = null;
+    let waited = 0;
+    for (let i = 0; i < 25; i++) {
+      await sleep(1);
+      waited++;
+      if (runAborted()) return;
+      res = res || readQuizResult(wins);
+      redo = redo || findRedoEntry(wins);
+      gate = gate || findGatePopup(wins);
+      // 弹窗型判分:文案一到就够判断了,不用等它给出百分比(它根本不给)
+      if (gate && i >= 2) break;
+      if (res && redo) break;   // 判分 + 重做入口都拿到,不必再等
+      if (res && i >= 3) break;
+    }
+    // 弹窗说"未达及格线/请重做" → 这就是平台明确告知"有错题、要重做":
+    // 先点掉弹窗(它挡着题目区和重做入口),再读判分,读不到也照样按"有错题"往下走
+    if (gate && !(res && res.allRight)) {
+      log('📋 平台弹窗提示「' + gate.text.slice(0, 40) + '」,按"有错题需重做"处理', 'warn');
+      try {
+        if (gate.okBtn) gate.okBtn.click();
+        else { for (const w of wins) { if (clickButtonByText(w, ['确定', '确认', '知道了', '关闭'])) break; } }
+      } catch (e) { /* ignore */ }
+      await sleep(2);
+      res = readQuizResult(wins) || res;
+      redo = findRedoEntry(wins) || redo;
+      if (!res) res = { pct: 0, basis: '弹窗提示未达及格线(未给分数)', allRight: false, wrong: -1 };
+    }
+    if (!res) {
+      if (redo) {
+        log('📊 等了 ' + waited + 's 仍没读到判分结果,无法判断准确率(不自动重做)', 'warn');
+        recordSubmitFail({ chapter: curChapterName, node: node, reason: '提交后没读到判分结果(可能没提交成功),需人工确认' });
+      } else {
+        log('📊 未读到判分结果(此节点多半不支持重复提交),不做准确率后续处理', 'info');
+      }
+      return;
+    }
+    // ① 先查有没有错题:没有错题就是全对,直接进下一个节点,不折腾重做
+    if (res.allRight) {
+      log('✅ 无错题(全对):' + res.basis + ',进入下一个节点', 'ok');
+      return;
+    }
+    // wrong = -1 表示只读到总百分比、没读到逐题明细
+    const wrongCnt = res.wrong > 0 ? res.wrong : 0;
+    const detailKnown = res.wrong >= 0;
+    log('📊 提交后准确率 ' + res.pct + '%(依据:' + res.basis + (detailKnown ? ';错题 ' + wrongCnt + ' 道' : '') + '),阈值 ' + needPct + '%', res.pct >= needPct ? 'ok' : 'warn');
+    // ② 有错题:开启「有错必修」就修(不管整体准确率),否则按阈值判;
+    //    只读到总百分比时(不知错题明细)只能按阈值判
+    const needFix = (detailKnown && wrongCnt > 0) ? (fixAllWrong ? true : res.pct < needPct) : res.pct < needPct;
+    if (!needFix) { log('🎯 准确率达标,进入下一个节点', 'ok'); return; }
+    const wrongs = collectWrongQuestions(wins);
+    // 没有「重做」按钮但有错题:先看关掉弹窗后题目是否已经解锁(可改可交),
+    // 能再交一次就修完错题重新提交 —— 别因为少一个按钮就把整个节点丢掉
+    const retake = redo ? null : canRetake(wins);
+    if (!redo && !retake) {
+      log(wrongCnt > 0 ? '⚠ 有 ' + wrongCnt + ' 道错题,但该节点没有「重做」入口(不可重复提交),只记录结果'
+        : '⚠ 准确率不达标,但该节点没有「重做」入口(不可重复提交),不再处理', 'warn');
+      if (wrongCnt > 0) {
+        recordSubmitFail({ chapter: curChapterName, node: node, reason: '有 ' + wrongCnt + ' 道错题,但该节点不可重复提交(无重做入口)' });
+        if (wrongs.length) {
+          // 修不了也先把正确答案写进错题本:下次遇到同题直接答对,不算白跑
+          wrongs.forEach((it) => { if (it.right) recordFix(it.q, [it.right]); });
+          log('📕 已把 ' + wrongs.filter((x) => x.right).length + ' 道错题的正确答案写入错题本(供下次自动答对)', 'ok');
+        }
+      }
+      return;
+    }
+    if ((redoCounts[nodeKey] || 0) >= redoMax) {
+      log('⛔ 该节点已自动重做 ' + redoCounts[nodeKey] + ' 次仍未通过,停止重做,记入「未提交」栏人工处理', 'warn');
+      recordSubmitFail({ chapter: curChapterName, node: node, reason: '自动重做 ' + redoCounts[nodeKey] + ' 次仍未达到准确率要求' });
+      return;
+    }
+    // ③ 只重问判错的题(不全卷重来):结果页给了正确答案就直接用,比再问一次 AI 更准
+    if (!wrongs.length) {
+      log('⚠ 有错题但结果页没暴露错题明细(定位不到具体哪几题错),不做整卷重问,记入「未提交」栏人工核对', 'warn');
+      recordSubmitFail({ chapter: curChapterName, node: node, reason: '准确率 ' + res.pct + '%(错 ' + wrongCnt + ' 道),但结果页未暴露错题明细,无法只修正错题' });
+      return;
+    }
+    log('📕 开始单独处理错题(共 ' + wrongs.length + ' 题,其余题不动)', 'warn');
+    let fixed = 0;
+    for (let i = 0; i < wrongs.length; i++) {
+      if (runAborted()) return;
+      const item = wrongs[i];
+      if (item.right) {
+        recordFix(item.q, [item.right]);
+        fixed++;
+        log('  [' + (i + 1) + '/' + wrongs.length + '] 结果页已给正确答案: ' + item.right, 'ok');
+        continue;
+      }
+      const ans = await getAnswers(item.q, '这道题上次已被判为错误,请重新审题后给出答案,不要重复上次的答案。');
+      if (ans.length) {
+        recordFix(item.q, ans);
+        fixed++;
+        log('  [' + (i + 1) + '/' + wrongs.length + '] 重问 AI 得到新答案: ' + ans.join(' / '), 'ok');
+      } else {
+        log('  [' + (i + 1) + '/' + wrongs.length + '] 重问 AI 未取得答案,该题留待手动处理', 'warn');
+      }
+    }
+    log('📕 错题处理完成(' + fixed + '/' + wrongs.length + ' 题已写入错题本)', fixed ? 'ok' : 'warn');
+    redoCounts[nodeKey] = (redoCounts[nodeKey] || 0) + 1;
+    if (redo) {
+      try {
+        redo.el.click();
+        log('🔁 已点击「重做」(第 ' + redoCounts[nodeKey] + '/' + redoMax + ' 次),该节点会用新答案重做', 'ok');
+        await sleep(3);
+      } catch (e) {
+        log('自动点击「重做」失败,请手动点重做(错题本已更新,重做时自动用新答案): ' + (e.message || e), 'warn');
+      }
+      return;
+    }
+    // 无重做按钮但题目已解锁:改完错题直接重新提交一次
+    try {
+      retake.el.click();
+      log('🔁 该节点无「重做」按钮,但题目已解锁:已重新提交(第 ' + redoCounts[nodeKey] + '/' + redoMax + ' 次)', 'ok');
+      await sleep(3);
+      const ack = readSubmitAck(wins);
+      if (ack === 'fail') {
+        for (const w of wins) { if (clickButtonByText(w, ['确定', '确认', '提交'])) break; }
+        await sleep(2);
+      }
+    } catch (e) {
+      log('重新提交失败,请手动操作(错题本已更新): ' + (e.message || e), 'warn');
+    }
+  }
+
   /* ==================== 章节主循环 ==================== */
   let running = false;
   let lastIframeUrl = '';
@@ -2960,17 +3703,92 @@
     return false;
   }
 
-  // 切下一节:优先老版 .nextChapter,兜底新版"下一节"按钮
-  function clickNextSection() {
-    const next = document.querySelector('.nextChapter');
-    if (next) { try { next.click(); } catch (e) { /* ignore */ } return true; }
-    const nodes = Array.from(document.querySelectorAll('button, a, div, span'));
+  // 点"下一节/下一章":多入口兜底(老版 .nextChapter、onclick 带 nextChapter、文本按钮)
+  function clickNextChapterBtn() {
+    const sels = ['.nextChapter', '.nextChapterBtn', '.nextChapterBtnA', '#nextChapter',
+      'a[onclick*="nextChapter"]', '.prev_next .next', '.jb_btn.next'];
+    for (const s of sels) {
+      let el = null;
+      try { el = document.querySelector(s); } catch (e) { el = null; }
+      if (el) { try { el.click(); return true; } catch (e) { /* ignore */ } }
+    }
+    let nodes = [];
+    try { nodes = Array.from(document.querySelectorAll('button, a, div, span, li')); } catch (e) { nodes = []; }
     for (const n of nodes) {
-      if ((n.textContent || '').trim() === '下一节') {
-        try { n.click(); } catch (e) { /* ignore */ }
-        return true;
+      const t = String(n.textContent || '').replace(/\s+/g, '');
+      if (!t || t.length > 10) continue;
+      if (t === '下一节' || t === '下一章' || t === '下一节>' || t === '下一章>' || t === '下一节»') {
+        try { n.click(); return true; } catch (e) { /* ignore */ }
       }
     }
+    return false;
+  }
+
+  // 兼容旧名
+  const clickNextSection = clickNextChapterBtn;
+
+  // 当前章节指纹(章节名 + 卡片 iframe 地址 + 前几个任务点标识)
+  // 只看章节名和 iframe 地址不够:很多课程每章都叫「章节测验」,切章时 iframe 地址也可能沿用,
+  // 于是"没切过去"被当成"切过去了",脚本对着旧章空转。
+  function chapterSignature() {
+    let href = '';
+    let body = '';
+    try {
+      const f = document.querySelector('#iframe');
+      if (f && f.contentWindow) {
+        const CW = f.contentWindow;
+        href = String(CW.location.href || '');
+        const icons = Array.from(CW.document.querySelectorAll('.ans-job-icon')).slice(0, 3);
+        body = icons.map((ic) => {
+          const fr = ic.parentElement ? ic.parentElement.querySelector('iframe') : null;
+          return fr ? String(fr.getAttribute('src') || '').slice(-50) : '-';
+        }).join(';');
+        if (!icons.length) {
+          body = String((CW.document.body && CW.document.body.textContent) || '').replace(/\s+/g, '').slice(0, 60);
+        }
+      } else if (f) {
+        href = String(f.getAttribute('src') || '');
+      }
+    } catch (e) { href = ''; }
+    return (readChapterName() || '') + '|' + href + '|' + body;
+  }
+
+  // 切下一节/下一章:点完必须确认页面真的换了章节,没换就重试。
+  // 旧实现点了就当成功 —— 按钮无效时同一章会被反复扫描,日志刷屏还以为是"切过去了"
+  async function switchNextChapter(tag) {
+    const label = tag || '下一章';
+    const before = chapterSignature();
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      if (runAborted()) return false;
+      if (!clickNextChapterBtn()) {
+        // 没有按钮就是到头了(最后一节/最后一章)。以前这里还要重试 3 次、每次等 1s,
+        // 白等 3 秒只是把"没得切"重复说三遍,对结果没有任何帮助
+        log(`🏁 没有「${label}」入口,已到课程最后一个章节,自动切换到此结束`, 'warn');
+        log('👉 若还有其它章节要刷,请在课程目录里手动点开,脚本会自动接着处理', 'info');
+        return false;
+      }
+      for (let i = 0; i < 16; i++) {
+        await sleep(0.5);
+        if (runAborted()) return false;
+        if (chapterSignature() !== before) {
+          // 刚变过去可能只是加载中间态,再等一会儿复核一次,确认不是"闪一下又回到原章节"
+          const sig = chapterSignature();
+          await sleep(1.2);
+          if (chapterSignature() !== before && chapterSignature() === sig) {
+            // 页面确实换了章:清掉旧的 iframe 记录,让 startWatch 立刻按新页面接手续扫,
+            // 不用等下一次 URL 变化(有些课程切章后地址栏/iframe 地址并不变)
+            lastIframeUrl = '';
+            log(`→ 已切换到${label}`, 'ok');
+            return true;
+          }
+          break;   // 只是中间态,退回重试
+        }
+      }
+      log(`点了「${label}」但页面没变化(第 ${attempt}/3 次),稍后重试`, 'warn');
+      await sleep(1.5);
+    }
+    log(`⛔ 连续 3 次都没切到${label}(按钮点了没反应),停止自动切换,避免同一章反复扫描`, 'warn');
+    log('👉 如需继续,请手动点一下课程目录里的下一章,脚本会自动接着处理新章节', 'info');
     return false;
   }
 
@@ -3073,10 +3891,36 @@
     // 4) 切下一节
     if (runAborted()) return;
     await sleep(0.3);
-    if (CONFIG.autoJump && clickNextSection()) {
-      log('→ 切换到下一节', 'ok');
-    } else {
-      log('未找到"下一节"按钮(可能已是最后一节)', 'warn');
+    if (CONFIG.autoJump) await switchNextChapter('下一节');
+    else log('自动切节已关闭,停在当前节', 'info');
+  }
+
+  // 任务点是否已完成:老版把 ans-job-finished 挂在卡片外层,新版挂在自己身上或内部图标上
+  function jobFinished(icon) {
+    try {
+      if (!icon) return false;
+      if (icon.classList && icon.classList.contains('ans-job-finished')) return true;
+      const p = icon.parentElement;
+      if (p && p.classList && p.classList.contains('ans-job-finished')) return true;
+      if (p && p.querySelector && p.querySelector('.ans-job-finished')) return true;
+      const t = String(((p || icon).textContent) || '').slice(0, 80);
+      if (/已完成/.test(t)) return true;
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+
+  // 一轮处理完后等平台把"已完成"标记刷回来(最少 3s、最多 15s),避免刚做完就复检导致重复跑
+  async function waitIconsSettled(cardsWin, maxMs = 15000) {
+    const start = Date.now();
+    let prev = -1;
+    while (Date.now() - start < maxMs) {
+      await sleep(1);
+      let remain = -1;
+      try {
+        remain = Array.from(cardsWin.document.querySelectorAll('.ans-job-icon')).filter((ic) => !jobFinished(ic)).length;
+      } catch (e) { return; }
+      if (remain === prev && Date.now() - start >= 3000) return;
+      prev = remain;
     }
   }
 
@@ -3092,6 +3936,7 @@
       return;
     }
     try { if (typeof window.scroll2Job === 'function') window.scroll2Job(); } catch (e) { /* ignore */ }
+    curChapterName = readChapterName();
     // 等卡片渲染完再判断结构:刚切章节时立刻数任务点容易数到 0,导致整章被跳成"新版结构"
     const cardsReady = () => {
       try {
@@ -3101,10 +3946,10 @@
       } catch (e) { return false; }
     };
     for (let i = 0; i < 24 && !cardsReady(); i++) await sleep(0.5);
-    const icons = cardsWin.document.querySelectorAll('.ans-job-icon');
-    if (!icons.length) {
+    const listIcons = () => Array.from(cardsWin.document.querySelectorAll('.ans-job-icon'));
+    const total = listIcons().length;
+    if (!total) {
       log('未找到任务点图标,尝试新版知识卡片模式处理...', 'warn');
-      // 结构侦察:输出卡片 iframe 信息,帮助定位新版页面结构
       try {
         const frames = Array.from(cardsWin.document.querySelectorAll('iframe'));
         const srcs = frames.map((f) => String(f.src || f.getAttribute('data') || '').slice(0, 120));
@@ -3112,66 +3957,109 @@
       } catch (e) {
         log('🔍 侦察失败: ' + e.message, 'err');
       }
-      // 降级:按新版知识卡片模式直接处理(纯 PDF/视频/图片单模块卡片也能过)
       await newChapterLoop(cardsWin);
       return;
     }
-    let finishedCount = 0;
-    for (const icon of Array.from(icons)) {
-      if (runAborted()) { if (PAUSED) log('⏸ 已暂停,本轮任务停止(点 ▶ 恢复)', 'warn'); return; }
-      if (dailyLimitReached) { log('⏹ 今日刷课已到上限,停止任务处理', 'warn'); return; }
-      const parent = icon.parentElement;
-      if (parent && parent.classList.contains('ans-job-finished')) { finishedCount++; continue; }
-      let iframe = parent ? parent.querySelector('iframe') : null;
-      if (!iframe) {
-        // 懒加载:任务点卡片有时会晚一点才插入 iframe,等 5s 再说"没有"
-        for (let i = 0; i < 10 && !iframe; i++) {
-          await sleep(0.5);
-          iframe = parent ? parent.querySelector('iframe') : null;
-        }
-      }
-      if (!iframe) { log('任务点无 iframe(等待 5s 仍未出现),跳过', 'warn'); continue; }
-      let info = {};
-      try { info = JSON.parse(iframe.getAttribute('data') || '{}'); } catch (e) { /* ignore */ }
-      const name = info.name || info.title || '';
-      const src = iframe.src || '';
-      log(`开始任务点: ${name || src.slice(-40)}`);
-      try {
-        if (src.includes('/ananas/modules/video/index.html')) {
-          if (CONFIG.autoVideo) await videoTask(iframe, cardsWin); else log('视频任务已跳过(配置关闭)');
-        } else if (src.includes('/ananas/modules/audio/index.html')) {
-          if (CONFIG.autoAudio) await audioTask(iframe); else log('音频任务已跳过(配置关闭)');
-        } else if (isWorkSrc(src)) {
-          if (CONFIG.autoWork) await workTask(iframe); else log('测验任务已跳过(配置关闭)');
-        } else if (src.includes('/ananas/modules/pdf/index.html')) {
-          await pdfTask(iframe);
-        } else if (src.includes('/ananas/modules/img/') || src.includes('/ananas/modules/image/') || src.includes('/ananas/modules/picture/') || /img.*index\.html/.test(src)) {
-          await imageTask(iframe);
-        } else {
-          // 未知包装:先看看里面是不是题目,是就按测验处理(新版各种嵌法都能兜住)
-          let inner = null;
-          try { inner = findQuizTree(iframe.contentWindow); } catch (e) { /* ignore */ }
-          if (inner) {
-            log('🕵 未知任务类型内含题目,按测验处理');
-            if (CONFIG.autoWork) await workTask(iframe);
-          } else {
-            log('未知任务类型: ' + src, 'warn');
-            log('🔍 未知模块 src 全文: ' + src, 'info');
+    log(`📚 当前章节:${curChapterName || '未识别'},共 ${total} 个任务点`, 'ok');
+
+    // 复检:一轮跑完重新数"还没完成"的任务点,最多 3 轮。
+    // 原实现只扫一遍就切下一章 —— 卡在懒加载/超时/临时失败上的节点会被永久跳过,
+    // 用户看到的就是"整章刷完却还有红的任务点"。
+    const MAX_ROUNDS = 3;
+    const attempts = {};   // 同一节点最多尝试 2 次(跨轮累计),防止某个坏节点把整章拖进死循环
+    let left = -1;
+    for (let round = 1; round <= MAX_ROUNDS; round++) {
+      if (runAborted()) return;
+      const icons = listIcons();
+      const todo = icons.filter((ic) => !jobFinished(ic));
+      if (!todo.length) { left = 0; log(`✓ 本章任务点全部完成(${icons.length} 个)`, 'ok'); break; }
+      log(`第 ${round}/${MAX_ROUNDS} 轮扫描:共 ${icons.length} 个任务点,待处理 ${todo.length} 个`);
+      for (let idx = 0; idx < icons.length; idx++) {
+        const icon = icons[idx];
+        if (jobFinished(icon)) continue;
+        if (runAborted()) { if (PAUSED) log('⏸ 已暂停,本轮任务停止(点 ▶ 恢复)', 'warn'); return; }
+        const parent = icon.parentElement;
+        let iframe = parent ? parent.querySelector('iframe') : null;
+        if (!iframe) {
+          // 懒加载:任务点卡片有时会晚一点才插入 iframe,等 5s 再说"没有"
+          for (let k = 0; k < 10 && !iframe; k++) {
+            await sleep(0.5);
+            iframe = parent ? parent.querySelector('iframe') : null;
           }
         }
-      } catch (e) {
-        if (runAborted()) return;   // 暂停/切页导致的取消,不当成异常刷屏
-        log(`任务处理异常: ${e.message}`, 'err');
+        if (!iframe) { log('任务点无 iframe(等待 5s 仍未出现),本轮跳过', 'warn'); continue; }
+        let info = {};
+        try { info = JSON.parse(iframe.getAttribute('data') || '{}'); } catch (e) { /* ignore */ }
+        const name = info.name || info.title || '';
+        const src = iframe.src || '';
+        const key = idx + '|' + src.slice(-60);
+        if ((attempts[key] || 0) >= 2) {
+          log(`↷ 跳过(该任务点已尝试 2 次仍未完成):${name || src.slice(-40)}`, 'warn');
+          continue;
+        }
+        attempts[key] = (attempts[key] || 0) + 1;
+        curNodeName = name || src.slice(-40);
+        log(`开始任务点: ${curNodeName}`);
+        try {
+          if (src.includes('/ananas/modules/video/index.html')) {
+            if (CONFIG.autoVideo) await videoTask(iframe, cardsWin); else log('视频任务已跳过(配置关闭)');
+          } else if (src.includes('/ananas/modules/audio/index.html')) {
+            if (CONFIG.autoAudio) await audioTask(iframe); else log('音频任务已跳过(配置关闭)');
+          } else if (isWorkSrc(src)) {
+            if (CONFIG.autoWork) await workTask(iframe); else log('测验任务已跳过(配置关闭)');
+          } else if (src.includes('/ananas/modules/pdf/index.html')) {
+            await pdfTask(iframe);
+          } else if (src.includes('/ananas/modules/img/') || src.includes('/ananas/modules/image/') || src.includes('/ananas/modules/picture/') || /img.*index\.html/.test(src)) {
+            await imageTask(iframe);
+          } else {
+            // 未知包装:先看看里面是不是题目,是就按测验处理(新版各种嵌法都能兜住)
+            let inner = null;
+            try { inner = findQuizTree(iframe.contentWindow); } catch (e) { /* ignore */ }
+            if (inner) {
+              log('🕵 未知任务类型内含题目,按测验处理');
+              if (CONFIG.autoWork) await workTask(iframe);
+            } else {
+              log('未知任务类型: ' + src, 'warn');
+              log('🔍 未知模块 src 全文: ' + src, 'info');
+            }
+          }
+        } catch (e) {
+          if (runAborted()) return;   // 暂停/切页导致的取消,不当成异常刷屏
+          log(`任务处理异常: ${e.message}`, 'err');
+        }
+        if (runAborted()) { if (PAUSED) log('⏸ 已暂停,本轮任务停止(点 ▶ 恢复)', 'warn'); return; }
+        await sleep(0.3);
       }
-      if (runAborted()) { if (PAUSED) log('⏸ 已暂停,本轮任务停止(点 ▶ 恢复)', 'warn'); return; }
-      await sleep(0.3);
+      // 复检前等状态刷新,否则刚做完的节点还会被当成未完成
+      await waitIconsSettled(cardsWin);
+      if (runAborted()) return;
+      const nowIcons = listIcons();
+      left = nowIcons.filter((ic) => !jobFinished(ic)).length;
+      log(`第 ${round} 轮结束:${nowIcons.length - left}/${nowIcons.length} 个任务点已完成`, left ? 'warn' : 'ok');
+      if (!left) break;
+      if (round < MAX_ROUNDS) log(`🔁 还有 ${left} 个任务点未完成,开始复检第 ${round + 1} 轮`, 'warn');
     }
-    log(`本章扫描结束(共 ${icons.length} 个任务点)`, 'ok');
     if (runAborted()) return;
+    if (left > 0) {
+      // 没做完就不切章:切走了这些节点下一轮不会自动回来,只会一直空着
+      log(`⛔ 复检 ${MAX_ROUNDS} 轮后仍有 ${left} 个任务点未完成,本章先不切换下一章`, 'warn');
+      const unfin = listIcons().filter((ic) => !jobFinished(ic));
+      for (const ic of unfin) {
+        let n = '';
+        try {
+          const f = ic.parentElement ? ic.parentElement.querySelector('iframe') : null;
+          const d = f ? JSON.parse(f.getAttribute('data') || '{}') : {};
+          n = d.name || d.title || (f ? String(f.src).slice(-40) : '');
+        } catch (e) { /* ignore */ }
+        recordSubmitFail({ chapter: curChapterName, node: n || '未知任务点', reason: '多轮复检仍未完成(视频/音频可能卡住或被平台判定异常)' });
+      }
+      return;
+    }
+    log(`本章扫描结束(共 ${total} 个任务点)`, 'ok');
     if (CONFIG.autoJump) {
-      const next = document.querySelector('.nextChapter');
-      if (next) { log('→ 切换到下一章'); next.click(); }
-      else log('未找到下一章按钮(可能已是最后一章)', 'warn');
+      await switchNextChapter('下一章');
+    } else {
+      log('自动切章已关闭,本章完成后停在当前页', 'info');
     }
   }
 

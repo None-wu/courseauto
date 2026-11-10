@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>dowork · 提交后准确率检测(模拟)</title>
+<style>
+  body { margin: 0; padding: 12px; font: 13px/1.6 "Microsoft YaHei", sans-serif; color: #333; background: #fff; }
+  .questionLi { border: 1px solid #e5e8f0; border-radius: 8px; padding: 10px; margin-bottom: 10px; }
+  .mark_name { font-size: 13px; font-weight: 600; margin: 0 0 8px; }
+  .colorShallow { color: #8a90a2; font-weight: 400; }
+  ul { list-style: none; padding: 0; margin: 6px 0 0; }
+  li { padding: 5px 8px; border: 1px solid #e8ebf3; border-radius: 6px; margin-bottom: 5px; cursor: pointer; }
+  li:hover { background: #f3f7ff; }
+  .num_option { color: #8a90a2; margin-right: 4px; }
+  .dui { border-color: #16a34a; background: #f0fdf4; }
+  .cuo { border-color: #dc2626; background: #fef2f2; }
+  .rightAnswer { color: #16a34a; font-size: 12px; margin-top: 6px; }
+  #score { margin-top: 10px; font-weight: 600; color: #b45309; }
+  #redoBtn { margin-top: 8px; padding: 4px 10px; }
+  #bar { margin-top: 8px; color: #6b7280; }
+</style>
+</head>
+<body>
+<h3>第 5 章 · 章节测验(2 题:提交后判分 50%,可重做)</h3>
+<div id="list"></div>
+<div id="bar">未提交</div>
+<script>
+  // 用途:验证「提交后准确率检测」。
+  //   两题都能填上答案(填充率 100% → 会提交),但第 2 题 AI 给的答案与平台判分不符,
+  //   提交后平台判分 50%。结果页给「正确答案」+「重做」入口时 → 脚本应记错题本并点击重做;
+  //   redo=0 时不渲染重做按钮 → 脚本应判定"不可重复提交"并放弃后续处理。
+  var params = new URLSearchParams(location.search);
+  var allowRedo = params.get('redo') !== '0';
+  var list = document.getElementById('list');
+  function shell(id, title) {
+    var box = document.createElement('div');
+    box.className = 'questionLi';
+    box.id = 'q' + id;
+    var name = document.createElement('h3');
+    name.className = 'mark_name';
+    name.innerHTML = '<span class="colorShallow">[单选题]</span>' + title + '（2.0分）';
+    box.appendChild(name);
+    list.appendChild(box);
+    return box;
+  }
+  function choices(box, qid, opts) {
+    var ul = document.createElement('ul');
+    opts.forEach(function (o, i) {
+      var li = document.createElement('li');
+      var letter = String.fromCharCode(65 + i);
+      li.innerHTML = '<span class="num_option">' + letter + '、</span><span class="after">' + o + '</span>';
+      var inp = document.createElement('input');
+      inp.type = 'radio';
+      inp.name = 'q' + qid;
+      inp.value = letter;
+      inp.style.display = 'none';
+      li.appendChild(inp);
+      li.addEventListener('click', function () {
+        Array.prototype.forEach.call(box.querySelectorAll('input'), function (x) { x.checked = false; });
+        inp.checked = true;
+      });
+      ul.appendChild(li);
+    });
+    box.appendChild(ul);
+  }
+  var q1 = shell(0, '下列哪项是 HTTP 的默认端口？');
+  choices(q1, 0, ['80', '443', '22', '21']);
+  var q2 = shell(1, '1 + 1 等于几（平台判分与 AI 故意不一致）');
+  choices(q2, 1, ['1', '2', '3', '4']);
+
+  // 平台判分规则:第 1 题 A 正确;第 2 题默认正确项为 C(AI 会答 B → 判错)。
+  //   ?all=1 时两题都与 AI 答案一致 → 提交后"无错题",用来验证全对短路。
+  var allRight = params.get('all') === '1';
+  var TRUTH = allRight ? ['A', 'B'] : ['A', 'C'];
+
+  window.btnBlueSubmit = function () {
+    window.__submitted = true;
+    window.__submittedAt = Date.now();
+    document.getElementById('bar').textContent = '已提交（模拟）';
+    document.getElementById('bar').style.color = '#16a34a';
+    renderResult();
+  };
+  window.submitCheckTimes = function () {};
+  window.noSubmit = function () { window.__noSubmit = true; };
+
+  function renderResult() {
+    if (window.__resultShown) return;
+    window.__resultShown = true;
+    var right = 0;
+    Array.prototype.forEach.call(document.querySelectorAll('.questionLi'), function (box, i) {
+      var checked = box.querySelector('input[type=radio]:checked');
+      var picked = checked ? checked.value : '';
+      var ok = picked === TRUTH[i];
+      if (ok) right++;
+      box.classList.add(ok ? 'dui' : 'cuo');
+      if (!ok) {
+        var tip = document.createElement('div');
+        tip.className = 'rightAnswer';
+        tip.textContent = '正确答案：' + TRUTH[i];
+        box.appendChild(tip);
+      }
+    });
+    var pct = Math.round(right / TRUTH.length * 100);
+    var score = document.createElement('div');
+    score.id = 'score';
+    score.textContent = '正确率：' + pct + '%';
+    document.body.appendChild(score);
+    if (allowRedo) {
+      var btn = document.createElement('button');
+      btn.id = 'redoBtn';
+      btn.textContent = '重做';
+      btn.addEventListener('click', function () {
+        window.__redoClicked = true;
+        document.getElementById('bar').textContent = '已重做（模拟）';
+      });
+      document.body.appendChild(btn);
+    }
+  }
+</script>
+</body>
+</html>

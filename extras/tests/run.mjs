@@ -117,6 +117,16 @@ async function main() {
     await new Promise((r) => setTimeout(r, 300));
   }
 
+  // 第 2 章就是最后一章:再多等一会,让脚本走到"切章到头"这一步,验证它不再空转重试 3 次
+  if (state.chapter2) {
+    for (let i = 0; i < 60; i++) {
+      const tail = await logsText();
+      if (tail) tail.split('\n').forEach((l) => { if (l.trim()) seen.add(l.trim()); });
+      if (/已到课程最后一个章节/.test([...seen].join('\n'))) break;
+      await new Promise((r) => setTimeout(r, 300));
+    }
+  }
+
   const all = [...seen].join('\n');
   const has = (s) => all.includes(s);
 
@@ -134,6 +144,8 @@ async function main() {
   record('自动切到第 2 章', state.chapter2, 'nextChapter 被点击');
   record('音频任务完成', state.audio || has('音频任务完成'), 'ended 事件');
   record('图片任务完成', state.image, '停留 5~8s 后收尾');
+  record('提交后未停在作答状态', !has('仍停在作答状态'), '提交回执校验');
+  record('最后一章不再空转重试切章', /已到课程最后一个章节/.test(all) && !/未找到「下一章」按钮.*第 3\/3 次/.test(all), '无按钮即判定到头');
   record('主循环无异常', !state.error, '未出现"主循环异常"');
 
   // 上报链路

@@ -43,7 +43,39 @@
     f.src = t.src;
     card.appendChild(f);
     root.appendChild(card);
+    track(icon, f, t.id);
   });
+
+  // 真实平台在任务点做完后会把图标变绿(ans-job-finished)。
+  // 模拟页必须同样回执,否则脚本的"复检未完成就不切下一章"会被永远卡住。
+  function isDone(id, w) {
+    if (!w) return false;
+    // work 模块外面还套了一层容器(work-outer → doHomeWorkNew),完成标志在内层 window
+    var cands = [w];
+    try {
+      var inner = w.document.querySelector('iframe');
+      if (inner && inner.contentWindow) cands.push(inner.contentWindow);
+    } catch (e) { /* ignore */ }
+    for (var i = 0; i < cands.length; i++) {
+      var c = cands[i];
+      try {
+        if (id === 'video' && typeof c.isUnFinishJob === 'function' && !c.isUnFinishJob()) return true;
+        if (id === 'work' && c.__submitted) return true;
+        if (id === 'audio' && c.__audioDone) return true;
+        if ((id === 'pdf' || id === 'img') && c.__docDone) return true;
+      } catch (e) { /* ignore */ }
+    }
+    return false;
+  }
+  function track(icon, frame, id) {
+    var timer = setInterval(function () {
+      if (isDone(id, frame.contentWindow)) {
+        icon.className = 'ans-job-icon ans-job-finished';
+        icon.title = '已完成';
+        clearInterval(timer);
+      }
+    }, 400);
+  }
 </script>
 </body>
 </html>
