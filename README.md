@@ -8,6 +8,7 @@
 > 一个油猴(Tampermonkey)脚本,自动完成网课课程任务点。
 > **v1.3.0 起支持三个平台**:学习通(超星)、智慧树(知到)、雨课堂。
 > **零基础可用**:不用写一行代码,装两个东西,填一个 Key,打开课程页就自动干活。
+> 如果有优化和功能的建议可以发送邮件到None-wu@outlook.com有时间我会优化的
 
 > **来源**:本项目基于 [DaRin1403/xuexitong-autostudy](https://github.com/DaRin1403/xuexitong-autostudy)(MIT)二次开发,
 > 上游代码部分沿用其 MIT 许可与原始版权声明(完整保留于 `LICENSE-MIT-upstream`);`.git` 历史中保留了原作者的全部提交记录。在此基础上重构了内核/适配器分层、
