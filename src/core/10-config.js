@@ -12,6 +12,7 @@
     submitDelayMax: 0,     // 提交前最大延迟(秒,0=最快)
     stopAtTime: '',        // 定时关闭(HH:MM),到点自动停止挂机;留空 = 不关闭
     autoStart: true,       // 进入页面立即开始答题刷课;关掉 = 进页面先停在暂停态,手动点 ▶ 才开始
+    skipStuckChapter: true, // 某章任务点多轮复检仍未完成时,记进「未提交」后自动切下一章;关掉 = 停在本章不再往下走
     accCheckEnabled: false, // 提交后检测准确率(仅对「可重复提交」的任务点生效)
     minAccuracy: 0.9,      // 提交后要求的准确率,低于则重问错题(需 accCheckEnabled)
     accFixAllWrong: true,  // 只要有错题就去修(不看整体准确率);关掉则仅在低于 minAccuracy 时才修

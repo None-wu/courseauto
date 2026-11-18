@@ -58,7 +58,7 @@ npm run setup
 <details>
 <summary><b>方式 C：免安装 exe(Windows)</b></summary>
 
-👉 **[下载 courseauto-v1.5.5.exe](https://github.com/None-wu/courseauto/releases/latest)**(单文件,含网页 AI 中转;
+👉 **[下载 courseauto-v1.5.6.exe](https://github.com/None-wu/courseauto/releases/latest)**(单文件,含网页 AI 中转;
 压缩包与使用说明在同一个 Release 里)
 
 双击 → 浏览器自动打开向导 → 装油猴 → 点一下装脚本。**窗口保持开着**,脚本答题时靠它转发 AI 请求
@@ -352,6 +352,15 @@ npm run test:headed # 有头模式,肉眼看流程
 ---
 
 ## 📝 更新日志
+
+### v1.5.6 — 文档/PPT 任务重做 + 自动切章修复
+
+- 文档类任务(PPT / PDF / Word)统一走逐段滚动:滚到底 → 找「下一页」 → 轮询进度图标变绿,单节点最长 90s、最多 3 遍,不再"只滚一次干等 1 秒"
+- `.pptx` 并入文档分支,不再漏做
+- 切下一章优先点页尾 `#prevNextFocusNext`,隐藏按钮跳过;没有页尾按钮时回目录点下一章
+- 完成态按节点 iframe `src` 匹配,列表重绘后仍能正确识别已完成节点,避免重复做
+- 未完成原因按类型分别提示(文档 / 视频 / 作业 / 测验)
+- 新增 ⚙ 开关「➡️ 本章做不掉就跳下一章」,默认开启;关闭后停在本章等人工处理
 
 ### v1.5.5 — 可选「进入页面自动开始」
 

@@ -1171,23 +1171,99 @@
     log('✓ 音频任务完成');
   }
 
-  async function pdfTask(iframe) {
-    await waitIframeLoaded(iframe);
-    const win = iframe.contentWindow;
+  // 文档任务点真正承载内容的窗口:pdf 阅读器常把内容再套一层 #panView,ppt 则是 #pptView
+  function docInnerWin(win) {
+    let w = win;
     try {
-      const pan = win.document.querySelector('#panView');
-      if (pan && pan.contentWindow) {
-        const pw = pan.contentWindow;
-        pw.scrollTo(0, pw.document.body.scrollHeight);
-        await sleep(1);
-        pw.scrollTo(0, pw.document.body.scrollHeight);
-      } else {
-        win.scrollTo(0, win.document.body.scrollHeight);
-      }
-    } catch (e) { /* ignore */ }
-    await sleep(1);
-    log('✓ 文档任务处理完成');
+      const box = w.document.querySelector('#panView, #pptView, iframe#panView, iframe#pptView');
+      if (box && box.contentWindow) w = box.contentWindow;
+    } catch (e) { /* 跨域或未就绪,退回外层 */ }
+    return w;
   }
+
+  // 文档类(PDF/PPT/Word)任务点:平台的完成判定是"逐页翻到底 + 停留够时长",由阅读器自己往服务端上报。
+  // 旧实现只 scrollTo 到底一次、等 1s 就收手 —— 长文档根本来不及上报进度,任务点永远是红的
+  // (日志表现为"多轮复检仍未完成")。这里改成:逐段滚动 → 点翻页按钮扫到末页 → 轮询等图标变绿。
+  const DOC_NEXT_SELS = ['#nextPage', '.nextPage', '.pageNext', 'a.next', '#next', '[title="下一页"]', '[aria-label="下一页"]'];
+
+  async function docTask(iframe, opts) {
+    const o = opts || {};
+    const label = o.label || '文档';
+    const isDone = typeof o.isDone === 'function' ? o.isDone : null;
+    // 文档任务点的完成判定包含"阅读时长",长文档(几十页)按页累计往往要 1 分钟以上,
+    // 等太短会让本来就快做完的节点被判失败(旧版只等 1 秒)
+    const maxMs = o.maxMs || 90000;
+    try { await waitIframeLoaded(iframe, 60000, () => runAborted() || !iframe.isConnected); } catch (e) { /* 超时也继续:内容常已可滚动 */ }
+    if (runAborted()) return false;
+    const deadline = Date.now() + maxMs;
+    let ok = false;
+    let swept = 0;
+    for (let round = 1; round <= 3 && !ok; round++) {
+      if (runAborted() || !iframe.isConnected) break;
+      // 1) 逐段滚动:平台按滚动事件累计已读进度,一次跳到底只会被记成一页
+      try {
+        const w = docInnerWin(iframe.contentWindow);
+        const doc = w.document;
+        const scroller = doc.scrollingElement || doc.documentElement || doc.body;
+        const bodyH = doc.body ? doc.body.scrollHeight : 0;
+        const total = Math.max(scroller ? scroller.scrollHeight : 0, bodyH, 0);
+        const vh = w.innerHeight || 600;
+        const step = Math.max(200, Math.floor(vh * 0.75));
+        let y = 0;
+        let guard = 0;
+        while (y <= total + step && guard++ < 800 && Date.now() < deadline) {
+          if (runAborted()) return false;
+          try { w.scrollTo(0, y); } catch (e) { /* ignore */ }
+          y += step;
+          swept++;
+          await sleep(0.45);
+          if (isDone && isDone()) { ok = true; break; }
+        }
+        try { w.scrollTo(0, (doc.scrollingElement || doc.body || {}).scrollHeight || total); } catch (e) { /* ignore */ }
+      } catch (e) { /* 内层窗口暂不可读,下一轮再试 */ }
+      if (ok || runAborted()) break;
+      // 2) 点"下一页"扫到末页(阅读器/幻灯片翻页才会上报页进度);点不动或已禁用就停
+      let clicks = 0;
+      while (!ok && clicks < 120 && Date.now() < deadline) {
+        if (runAborted()) return false;
+        let btn = null;
+        try {
+          const inner = docInnerWin(iframe.contentWindow);
+          for (const s of DOC_NEXT_SELS) {
+            let cand = null;
+            try { cand = inner.document.querySelector(s); } catch (e) { cand = null; }
+            if (!cand) { try { cand = iframe.contentWindow.document.querySelector(s); } catch (e) { cand = null; } }
+            if (cand) { btn = cand; break; }
+          }
+        } catch (e) { btn = null; }
+        if (!btn) break;
+        const dis = (btn.disabled === true) || (btn.getAttribute && btn.getAttribute('disabled') !== null) ||
+          /disabled|ban/.test(String(btn.className || ''));
+        if (dis) break;
+        try { btn.click(); } catch (e) { break; }
+        clicks++;
+        await sleep(0.9);
+        if (isDone && isDone()) { ok = true; break; }
+      }
+      if (ok || runAborted()) break;
+      // 3) 停在末页等平台把"已完成"刷回来(上报有延迟,最长等到 deadline)
+      const waitUntil = Math.min(deadline, Date.now() + 20000);
+      while (Date.now() < waitUntil) {
+        if (runAborted()) return false;
+        if (isDone && isDone()) { ok = true; break; }
+        if (!iframe.isConnected) break;
+        await sleep(1);
+      }
+      if (ok || !isDone) break;   // 无 isDone 的场景(整卡片)滚完一轮就够,不空等
+      if (round < 3) log(`📄 ${label}第 ${round} 遍翻完仍未标记完成,重新从第一页扫`, 'warn');
+    }
+    if (ok) log(`✓ ${label}任务已标记完成(滚动 ${swept} 段)`, 'ok');
+    else log(`⚠ ${label}已翻到末页并停留等待,但任务点仍未变绿(平台可能要求更长阅读时长,或需手动翻到底)`, 'warn');
+    return ok;
+  }
+
+  // 兼容旧名
+  const pdfTask = (iframe, opts) => docTask(iframe, Object.assign({ label: 'PDF' }, opts || {}));
 
   // 图片任务点:没有视频,打开后"看完"图片即完成(停留 + 轻微滚动模拟查看)
   async function imageTask(iframe) {
@@ -1942,14 +2018,15 @@
     return false;
   }
 
-  // 点"下一节/下一章":多入口兜底(老版 .nextChapter、onclick 带 nextChapter、文本按钮)
+  // 点"下一节/下一章":多入口兜底(老版 .nextChapter、onclick 带 nextChapter、文本按钮、目录树)
   function clickNextChapterBtn() {
     const sels = ['.nextChapter', '.nextChapterBtn', '.nextChapterBtnA', '#nextChapter',
-      'a[onclick*="nextChapter"]', '.prev_next .next', '.jb_btn.next'];
+      '#prevNextFocusNext', 'a[onclick*="nextChapter"]', '.prev_next .next', '.jb_btn.next'];
     for (const s of sels) {
       let el = null;
       try { el = document.querySelector(s); } catch (e) { el = null; }
-      if (el) { try { el.click(); return true; } catch (e) { /* ignore */ } }
+      // 隐藏的元素点了也没反应(新版常把「下一节」藏起来),跳过
+      if (el && !isHidden(el)) { try { el.click(); return true; } catch (e) { /* ignore */ } }
     }
     let nodes = [];
     try { nodes = Array.from(document.querySelectorAll('button, a, div, span, li')); } catch (e) { nodes = []; }
@@ -1957,7 +2034,54 @@
       const t = String(n.textContent || '').replace(/\s+/g, '');
       if (!t || t.length > 10) continue;
       if (t === '下一节' || t === '下一章' || t === '下一节>' || t === '下一章>' || t === '下一节»') {
+        if (isHidden(n)) continue;
         try { n.click(); return true; } catch (e) { /* ignore */ }
+      }
+    }
+    // 最后一档:点右侧目录里的下一个章节项
+    return clickNextFromCatalog();
+  }
+
+  function isHidden(el) {
+    try {
+      if (!el || !el.getBoundingClientRect) return true;
+      if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return true;
+      const cs = getComputedStyle(el);
+      return cs.display === 'none' || cs.visibility === 'hidden';
+    } catch (e) { return false; }
+  }
+
+  // 从目录树点下一章:新版 mooc2 大量课程不再渲染「下一节」按钮,只有右侧目录,
+  // 光靠 .nextChapter 会判成"已到最后一章",整门课就停在这一章不再往下走(用户看到的"不会自己切了")
+  function clickNextFromCatalog() {
+    const norm = (el) => String((el && el.textContent) || '').replace(/\s+/g, '');
+    const cur = norm(document.querySelector('.posCatalog_select')) || String(readChapterName() || '').replace(/\s+/g, '');
+    const lists = ['.posCatalog_name', '#chapterList li', '.chapterList li', 'ul.chapter li',
+      '.catalog_show li', '.chapter_item'];
+    for (const s of lists) {
+      let items = [];
+      try { items = Array.from(document.querySelectorAll(s)); } catch (e) { items = []; }
+      if (items.length < 2) continue;
+      let idx = -1;
+      if (cur) {
+        for (let i = 0; i < items.length; i++) {
+          if (norm(items[i]) && norm(items[i]) === cur) { idx = i; }
+        }
+        // 目录里章名常带序号/后缀差异,精确匹配不到就退化成包含匹配
+        if (idx < 0) {
+          for (let i = 0; i < items.length; i++) {
+            const t = norm(items[i]);
+            if (t && cur && (t.includes(cur) || cur.includes(t))) { idx = i; }
+          }
+        }
+      }
+      if (idx < 0) continue;   // 认不出当前章就别乱点,免得跳到别的章
+      for (let j = idx + 1; j < items.length; j++) {
+        const it = items[j];
+        if (!norm(it) || norm(it) === cur) continue;
+        const target = it.querySelector('a') || it.querySelector('.posCatalog_name') || it;
+        if (isHidden(target)) continue;
+        try { target.click(); return true; } catch (e) { /* ignore */ }
       }
     }
     return false;
@@ -2121,11 +2245,11 @@
       const imgFrame = fs.find((f) => /\/ananas\/modules\/(img|image|picture)\//.test(String(f.src || '')));
       if (imgFrame) await imageTask(imgFrame);
     }
-    // 3.5) PDF/文档任务(纯 PDF 单模块卡片,如 3.8 节)
+    // 3.5) PDF/PPT/文档任务(纯文档单模块卡片,如 3.8 节)
     {
       const fs = Array.from(cardsWin.document.querySelectorAll('iframe'));
-      const pdfFrame = fs.find((f) => /\/ananas\/modules\/pdf\//.test(String(f.src || '')));
-      if (pdfFrame) await pdfTask(pdfFrame);
+      const docFrame = fs.find((f) => /\/ananas\/modules\/(pdf|ppt|pptx|doc|word)\//.test(String(f.src || '')));
+      if (docFrame) await docTask(docFrame, { label: '文档', maxMs: 45000 });
     }
     // 4) 切下一节
     if (runAborted()) return;
@@ -2186,6 +2310,26 @@
     };
     for (let i = 0; i < 24 && !cardsReady(); i++) await sleep(0.5);
     const listIcons = () => Array.from(cardsWin.document.querySelectorAll('.ans-job-icon'));
+    // 平台在任务点完成后会重绘列表,闭包里抓到的旧 icon 会脱离文档、永远读不到"已完成"。
+    // 所以按 iframe src 认出"同一个任务点"的当前节点再判断,避免把别的节点当成本节点
+    const iconDone = (icon, idx) => {
+      let now = [];
+      try { now = listIcons(); } catch (e) { return jobFinished(icon); }
+      const cur = now[idx];
+      if (cur && cur === icon) return jobFinished(cur);
+      const srcOf = (ic) => {
+        try {
+          const f = ic.parentElement ? ic.parentElement.querySelector('iframe') : null;
+          return f ? String(f.src || '').slice(-60) : '';
+        } catch (e) { return ''; }
+      };
+      const want = srcOf(icon);
+      if (want) {
+        const match = now.find((ic) => srcOf(ic) === want);
+        if (match) return jobFinished(match);
+      }
+      return jobFinished(icon);
+    };
     const total = listIcons().length;
     if (!total) {
       log('未找到任务点图标,尝试新版知识卡片模式处理...', 'warn');
@@ -2246,8 +2390,10 @@
             if (CONFIG.autoAudio) await audioTask(iframe); else log('音频任务已跳过(配置关闭)');
           } else if (isWorkSrc(src)) {
             if (CONFIG.autoWork) await workTask(iframe); else log('测验任务已跳过(配置关闭)');
-          } else if (src.includes('/ananas/modules/pdf/index.html')) {
-            await pdfTask(iframe);
+          } else if (/\/ananas\/modules\/(pdf|doc|word)\//.test(src)) {
+            await docTask(iframe, { label: '文档', isDone: () => iconDone(icon, idx) });
+          } else if (/\/ananas\/modules\/(ppt|pptx)\//.test(src)) {
+            await docTask(iframe, { label: 'PPT', isDone: () => iconDone(icon, idx) });
           } else if (src.includes('/ananas/modules/img/') || src.includes('/ananas/modules/image/') || src.includes('/ananas/modules/picture/') || /img.*index\.html/.test(src)) {
             await imageTask(iframe);
           } else {
@@ -2285,13 +2431,30 @@
       const unfin = listIcons().filter((ic) => !jobFinished(ic));
       for (const ic of unfin) {
         let n = '';
+        let src = '';
         try {
           const f = ic.parentElement ? ic.parentElement.querySelector('iframe') : null;
           const d = f ? JSON.parse(f.getAttribute('data') || '{}') : {};
           n = d.name || d.title || (f ? String(f.src).slice(-40) : '');
+          src = f ? String(f.src || '') : '';
         } catch (e) { /* ignore */ }
-        recordSubmitFail({ chapter: curChapterName, node: n || '未知任务点', reason: '多轮复检仍未完成(视频/音频可能卡住或被平台判定异常)' });
+        // 按类型给准确原因:文档任务点失败和视频失败完全是两回事,统一写"视频卡住"会把人带偏
+        let reason = '多轮复检仍未完成';
+        if (/\/ananas\/modules\/video\//.test(src)) reason = '视频任务点未完成(未播到结尾,或被平台判定无效:倍速/静音风控)';
+        else if (/\/ananas\/modules\/audio\//.test(src)) reason = '音频任务点未完成(未播到结尾)';
+        else if (/\/ananas\/modules\/(pdf|ppt|pptx|doc|word)\//.test(src)) reason = '文档任务点未上报完成(需逐页翻到末页并停留足够时长)';
+        else if (isWorkSrc(src)) reason = '测验未提交或未达提交条件(填充率未满/判分页未通过)';
+        else if (!src) reason = '任务点 iframe 未加载出来(卡片懒加载失败,可刷新页面重试)';
+        else if (src) reason = '未知任务类型未完成: ' + src.slice(-60);
+        recordSubmitFail({ chapter: curChapterName, node: n || '未知任务点', reason });
       }
+      // 默认继续往下走:卡住的节点已经记进「未提交」清单,再停在这一章只会让整门课一动不动
+      if (CONFIG.skipStuckChapter !== false && CONFIG.autoJump) {
+        log('⏭ 按「做不掉就跳下一章」跳过本章,继续下一章(卡住的节点见面板「未提交」栏)', 'warn');
+        await switchNextChapter('下一章');
+        return;
+      }
+      log('⛔ 已按设置停在本章(「做不掉就跳下一章」已关闭)', 'warn');
       return;
     }
     log(`本章扫描结束(共 ${total} 个任务点)`, 'ok');

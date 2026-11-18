@@ -436,6 +436,9 @@
       '<div class="field"><div class="row"><div class="label">🚀 进入页面自动开始</div>' +
         '<input id="cfgAutoStart" type="checkbox" ' + (CONFIG.autoStart !== false ? 'checked' : '') + '></div>' +
         '<div class="hint">开(默认):一进课程/作业页就自动答题刷课。关:进页面先停在「已暂停」,看完页面确认是这一节再点 ▶ 开始;保存后下次进入页面生效</div></div>' +
+      '<div class="field"><div class="row"><div class="label">⏭ 做不掉就跳下一章</div>' +
+        '<input id="cfgSkipStuck" type="checkbox" ' + (CONFIG.skipStuckChapter !== false ? 'checked' : '') + '></div>' +
+        '<div class="hint">开(默认):某章任务点多轮复检仍未完成(平台风控/文档不上报时长等),把节点记进「未提交」清单后自动切下一章,不让整门课停在一章。关:做不完就停在本章(旧行为)</div></div>' +
       '<div class="field"><div class="row"><div class="label">🎬 视频倍速</div></div>' +
         '<input id="cfgSpeed" type="number" step="0.25" min="1" max="2" value="' + CONFIG.speed + '">' +
         '<div class="hint">默认 2x(最快);1 = 原速最安全,2x 被检测风险最高,自行权衡</div></div>' +
@@ -545,6 +548,11 @@
             ? '🚀 已开启「进入页面自动开始」:下次进页面直接开始刷课'
             : '🚀 已关闭「进入页面自动开始」:下次进页面会停在暂停状态,点 ▶ 才开始', 'ok');
         }
+      }
+      // 卡住的章节是否自动跳过(默认开:否则平台风控卡住一个节点,整门课就停在这一章)
+      {
+        const skEl = document.getElementById('cfgSkipStuck');
+        if (skEl) CONFIG.skipStuckChapter = skEl.checked;
       }
       // 定时关闭:HH:MM,填空 = 不关闭;格式非法则回滚到旧值并提示
       {
