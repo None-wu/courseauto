@@ -20,6 +20,7 @@ const VERSION = (meta.match(/@version\s+(\S+)/) || [, '0.0.0'])[1];
 const SCRIPT = path.join(ROOT, 'userscripts', 'courseauto.user.js');
 const BRIDGE = path.join(ROOT, 'userscripts', 'courseauto-webai-bridge.user.js');
 const SETUP = path.join(ROOT, 'local', 'pages', 'setup.html');
+const CONSOLE = path.join(ROOT, 'local', 'pages', 'console.html');
 
 function step(n, msg) { console.log(`\n[${n}/4] ${msg}`); }
 
@@ -30,6 +31,7 @@ execSync(`node "${path.join(ROOT, 'tools', 'build.mjs')}"`, { stdio: 'inherit' }
 const scriptCode = readFileSync(SCRIPT, 'utf8');
 const bridgeCode = readFileSync(BRIDGE, 'utf8');
 const setupHtml = readFileSync(SETUP, 'utf8');
+const consoleHtml = readFileSync(CONSOLE, 'utf8');
 const sv = (scriptCode.match(/@version\s+(\S+)/) || [, VERSION])[1];
 const bv = (bridgeCode.match(/@version\s+(\S+)/) || [, '?'])[1];
 console.log(`   脚本 ${sv} / 桥 ${bv} / 安装页 ${(setupHtml.length / 1024).toFixed(1)} KB`);
@@ -42,7 +44,8 @@ const assetsModule =
   'export const ASSETS = {\n' +
   `  script: ${JSON.stringify(scriptCode)},\n` +
   `  bridge: ${JSON.stringify(bridgeCode)},\n` +
-  `  setup: ${JSON.stringify(setupHtml)}\n` +
+  `  setup: ${JSON.stringify(setupHtml)},\n` +
+  `  console: ${JSON.stringify(consoleHtml)}\n` +
   '};\n';
 writeFileSync(path.join(BUILD, 'assets.gen.mjs'), assetsModule, 'utf8');
 console.log(`   ${(assetsModule.length / 1024).toFixed(0)} KB`);
@@ -75,11 +78,49 @@ const exeName = `刷课助手-v${sv}.exe`;
 const exePath = path.join(DIST, exeName);
 if (existsSync(exePath)) rmSync(exePath);
 
-execFileSync(bun, [
+// 客户版默认"无控制台":双击不弹黑色窗口,启动信息由前端 /console 页承载。
+// 需要调试旧形态(带命令行窗口)时加 --console 重新打包。
+const HIDE_CONSOLE = !argv.includes('--console');
+const wv = sv.split('.').concat(['0', '0']).slice(0, 3).join('.');
+const buildArgs = [
   'build', '--compile',
   path.join(ROOT, 'local', 'app.mjs'),
-  '--outfile', exePath
-], { stdio: 'inherit', cwd: ROOT });
+  '--outfile', exePath,
+  '--windows-title=刷课助手',
+  '--windows-description=刷课助手 - 安装向导与答题中转',
+  '--windows-publisher=None-wu',
+  `--windows-version=${wv}`
+];
+if (HIDE_CONSOLE) buildArgs.push('--windows-hide-console');
+execFileSync(bun, buildArgs, { stdio: 'inherit', cwd: ROOT });
+
+/* bun 1.3.x 的 --windows-hide-console 实测不生效(产物仍是 CUI 子系统 3,双击照旧弹黑窗),
+   这里直接改 PE 可选头的 Subsystem 字段(等同 editbin /subsystem:windows),
+   改为 2(WINDOWS_GUI)后双击才真正不带命令行窗口。 */
+function patchSubsystem(file) {
+  const buf = readFileSync(file);
+  const optOff = buf.readInt32LE(0x3c) + 4 + 20;
+  const magic = buf.readUInt16LE(optOff);
+  if (magic !== 0x20b && magic !== 0x10b) throw new Error(`不是有效 PE(magic=0x${magic.toString(16)})`);
+  const off = optOff + 0x44;
+  const before = buf.readUInt16LE(off);
+  if (before === 2) return 2;
+  buf.writeUInt16LE(2, off);
+  writeFileSync(file, buf);
+  return before;
+}
+
+if (HIDE_CONSOLE) {
+  try {
+    const before = patchSubsystem(exePath);
+    console.log(`   形态: 无窗口(GUI 子系统 ${before} → 2,双击不出黑窗)`);
+  } catch (e) {
+    console.log(`   ! 无窗口化失败(不影响运行,仍会带黑窗):${e.message}`);
+  }
+} else {
+  console.log('   形态: 带命令行窗口(调试, -console)');
+}
+console.log(`   版本信息: 产品名 刷课助手 / 文件版本 ${wv}`);
 
 const mb = (statSync(exePath).size / 1024 / 1024).toFixed(0);
 console.log(`   ✓ ${exeName}  (${mb} MB)`);
@@ -96,10 +137,11 @@ const guide = `刷课助手 v${sv}  使用说明
 
 【三步上手】
 1) 双击 ${exeName}
-   会弹出这个黑色窗口,并在控制台里让你选一次「以后用哪个浏览器打开安装向导」:
-   系统默认 / Edge / Chrome / Firefox / Brave / 自定义路径 / 不自动打开(12 秒不选 = 系统默认)。
-   选完就记住了,以后不再问;想改可在向导页「打开方式」里随时改,或用 --no-open 参数启动只看不打开。
-   ⚠ 这个窗口要一直开着;关掉它 = 退出程序(已装好的脚本不受影响)。
+   直接弹出浏览器打开安装向导页,不会再出现黑色命令行窗口。
+   启动信息(端口、版本、更新状态、AI 中转计数、运行日志)全部在向导页顶栏的
+   「运行状态」里,对应地址 http://127.0.0.1:8790/console
+   ⚠ 程序在后台常驻:关掉网页不会退出;要退出请到「运行状态」页点「退出程序」
+     (已装好的脚本不受影响,只是网页 AI 答题中转会断开)。
 
 2) 按向导装油猴(Tampermonkey)扩展
    - Chrome / Edge 用户:点向导第 1 步的商店链接安装扩展
@@ -116,7 +158,7 @@ const guide = `刷课助手 v${sv}  使用说明
 
 【关于自动检测更新】
 每次双击启动,程序会自动去 GitHub 查最新版本:
-- 有新版本:黑色窗口里打印版本号,向导页顶部也会出现一条「发现新版本 vX」横幅,
+- 有新版本:向导页顶部出现一条「发现新版本 vX」横幅,「运行状态」页也会同步显示,
   点「下载」直接下到本机(失败会提示改用浏览器打开 Release 页面),点「跳过此版本」则不再提示这一版
 - 已是最新:静默,不打扰
 - 连不上 GitHub(校园网/代理/证书拦截):会明确提示"无法检测更新",不影响任何已有功能;
@@ -132,11 +174,17 @@ Q: 启动后提示"无法检测更新"?
 A: 本机连不上 GitHub。程序已对证书拦截做了宽松重试,仍失败说明网络层挡住(校园网/运营商/代理),
    不影响刷课与答题;要更新就手动开 Release 页面下载 exe 覆盖。
 
-Q: 不想每次都打开浏览器?
-A: 首次启动选「不自动打开(只显示地址,自己复制)」;之后想临时跳过,用 --no-open 参数启动。
+Q: 双击后没看到任何窗口?
+A: 客户版是无窗口程序,启动后直接弹浏览器;没弹出就手动打开 http://127.0.0.1:8790/setup
+   想看运行状态和日志:http://127.0.0.1:8790/console
 
-Q: 双击后提示"端口被占用"?
-A: 说明已经有一个本程序在跑,直接用浏览器里打开的向导页即可;不是问题。
+Q: 不想每次都自动弹浏览器?
+A: 向导页「打开方式」里选「不自动打开」,之后每次启动会弹一条提示框告知地址;
+   也可以用 --no-open 参数启动(只起服务,不弹浏览器)。
+
+Q: 提示"端口被占用"?
+A: 说明已经有一个本程序在跑,直接用浏览器里打开的向导页即可;不是问题
+   (端口被占时程序会自动换下一个端口,具体端口见「运行状态」页)。
 
 Q: Windows 提示"已保护你的电脑"(蓝色窗口)?
 A: 点"更多信息 → 仍要运行"。这是个人打包程序的常规提示,不是病毒。

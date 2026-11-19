@@ -3,157 +3,270 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>刷课助手 · 一键安装</title>
+<title>刷课助手 · 本机安装向导</title>
 <style>
   :root{
     color-scheme:dark;
-    --bg:#08080a; --card-a:rgba(26,26,30,.92); --card-b:rgba(11,11,13,.94);
-    --line:rgba(255,255,255,.1); --line-2:rgba(255,255,255,.18);
-    --txt:#e9e9ee; --txt-2:#a0a0aa; --txt-3:#75757f; --white:#fafafa;
-    --ok:#8ee6b0; --warn:#ffd479; --err:#ff9a9a;
+    --bg:#07070a;
+    --card-a:rgba(22,22,26,.9); --card-b:rgba(9,9,12,.92);
+    --line:rgba(255,255,255,.085); --line-2:rgba(255,255,255,.16); --line-3:rgba(255,255,255,.34);
+    --txt:#e6e6ec; --txt-2:#9b9ba6; --txt-3:#6d6d78;
+    --white:#fafafa;
+    --ok:#6fe39b; --warn:#ffcf6b; --err:#ff9090;
+    --rail:31.5px;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.65 "Microsoft YaHei",system-ui,-apple-system,sans-serif;
-       background-image:radial-gradient(1200px 600px at 16% -12%,rgba(255,255,255,.075),transparent 60%),
-                        radial-gradient(900px 520px at 100% -4%,rgba(255,255,255,.05),transparent 55%);
-       background-attachment:fixed;min-height:100vh;-webkit-font-smoothing:antialiased}
-  .wrap{max-width:880px;margin:0 auto;padding:0 22px 88px}
+  body{margin:0;background:var(--bg);color:var(--txt);min-height:100vh;
+       font:14px/1.68 "Microsoft YaHei UI","Microsoft YaHei",system-ui,-apple-system,"Segoe UI",sans-serif;
+       -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+       background-image:radial-gradient(1100px 560px at 14% -14%,rgba(255,255,255,.07),transparent 62%),
+                        radial-gradient(820px 520px at 100% -6%,rgba(255,255,255,.045),transparent 58%),
+                        linear-gradient(180deg,#08080b,#060608 60%);
+       background-attachment:fixed}
+  ::selection{background:rgba(255,255,255,.22);color:#fff}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,.14);border:3px solid transparent;background-clip:padding-box;border-radius:99px}
+  ::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,.26);background-clip:padding-box}
+  .wrap{max-width:920px;margin:0 auto;padding:0 22px 82px}
 
-  /* ---------- 顶栏 ---------- */
-  .top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:14px 0 12px;
-       backdrop-filter:blur(14px);background:linear-gradient(180deg,rgba(8,8,10,.95),rgba(8,8,10,.72) 70%,transparent)}
+  /* ================= 顶栏 ================= */
+  .top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:13px 0 11px;
+       backdrop-filter:blur(16px) saturate(150%);
+       background:linear-gradient(180deg,rgba(7,7,10,.96),rgba(7,7,10,.74) 68%,transparent)}
   .logo{display:flex;align-items:center;gap:10px;min-width:0}
-  .logo .mark{width:26px;height:26px;border-radius:8px;background:var(--white);color:#0a0a0a;font-weight:800;
-       display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .logo .mark{width:27px;height:27px;border-radius:9px;background:var(--white);color:#0a0a0a;font-weight:800;flex:none;
+       display:flex;align-items:center;justify-content:center;font-size:13px;
+       box-shadow:0 2px 10px rgba(255,255,255,.14),inset 0 -1px 0 rgba(0,0,0,.16)}
   .logo .name{font-size:14px;font-weight:700;color:var(--white);letter-spacing:.2px;white-space:nowrap}
   .logo .name small{font-weight:400;color:var(--txt-3);margin-left:6px;font-size:12px}
   .grow{flex:1}
+  .toolbar{display:flex;align-items:center;gap:7px}
+  .toolbar .btn .i{font-size:12.5px;line-height:1;display:inline-block;opacity:.85}
+  .toolbar .btn .t{font-size:12px}
   .vchip{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--txt-2);border:1px solid var(--line);
-       border-radius:999px;padding:4px 11px;white-space:nowrap;background:rgba(255,255,255,.03)}
-  .vchip i{width:6px;height:6px;border-radius:50%;background:var(--txt-3);display:inline-block;flex:none}
-  .vchip.ok i{background:var(--ok);box-shadow:0 0 8px rgba(142,230,176,.55)}
-  .vchip.new i{background:var(--warn);box-shadow:0 0 8px rgba(255,212,121,.6)}
+       border-radius:999px;padding:4px 11px;white-space:nowrap;background:rgba(255,255,255,.035);
+       transition:color .2s,border-color .2s}
+  .vchip i{width:6px;height:6px;border-radius:50%;background:var(--txt-3);display:inline-block;flex:none;transition:background .2s}
+  .vchip.ok{color:#cfd8d2}
+  .vchip.ok i{background:var(--ok);box-shadow:0 0 9px rgba(111,227,155,.6)}
+  .vchip.new{color:#f0e6cf;border-color:rgba(255,207,107,.4)}
+  .vchip.new i{background:var(--warn);box-shadow:0 0 9px rgba(255,207,107,.65)}
   .vchip.bad i{background:var(--err)}
 
-  /* ---------- 更新条 ---------- */
-  .ubar{margin:6px 0 16px;border:1px solid var(--line-2);border-radius:14px;overflow:hidden;
-        background:linear-gradient(160deg,rgba(38,38,44,.95),rgba(16,16,19,.95));position:relative}
+  /* ================= 更新条 ================= */
+  .ubar{margin:4px 0 18px;border:1px solid var(--line-2);border-radius:14px;overflow:hidden;position:relative;
+        background:linear-gradient(158deg,rgba(40,40,47,.96),rgba(14,14,18,.96));
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 10px 30px rgba(0,0,0,.36);
+        animation:rise .32s cubic-bezier(.2,.8,.2,1) both}
   .ubar[hidden]{display:none}
-  .ubar .row1{display:flex;align-items:center;gap:14px;padding:14px 16px;flex-wrap:wrap}
+  .ubar .row1{display:flex;align-items:center;gap:13px;padding:13px 15px;flex-wrap:wrap}
   .ubar .ic{width:34px;height:34px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;
         font-size:15px;background:rgba(255,255,255,.09);border:1px solid var(--line-2)}
-  .ubar .tx{min-width:180px;flex:1}
+  .ubar .tx{min-width:170px;flex:1}
   .ubar .tx b{display:block;font-size:13.5px;color:var(--white);font-weight:700}
-  .ubar .tx span{display:block;font-size:12px;color:var(--txt-2);margin-top:2px;word-break:break-all}
+  .ubar .tx span{display:block;font-size:12px;color:var(--txt-2);margin-top:3px;word-break:break-all}
   .ubar .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-  .ubar .bar{height:3px;background:rgba(255,255,255,.08);margin:0 16px 14px;border-radius:3px;overflow:hidden}
+  .ubar .bar{height:3px;background:rgba(255,255,255,.08);margin:0 15px 13px;border-radius:3px;overflow:hidden}
   .ubar .bar[hidden]{display:none}
-  .ubar .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#fff,rgba(255,255,255,.65));
-        transition:width .3s ease;border-radius:3px}
-  .ubar.muted{background:rgba(255,255,255,.03);border-color:var(--line)}
+  .ubar .bar i{display:block;height:100%;width:0;border-radius:3px;transition:width .3s ease;
+        background:linear-gradient(90deg,#fff,rgba(255,255,255,.62))}
+  .ubar.muted{background:rgba(255,255,255,.032);border-color:var(--line);box-shadow:none}
 
-  /* ---------- 主视觉 ---------- */
-  .hero{padding:26px 0 22px}
-  .badge{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;letter-spacing:2px;color:var(--txt-2);
-         border:1px solid var(--line-2);border-radius:999px;padding:4px 12px;margin-bottom:16px}
-  .badge i{width:6px;height:6px;border-radius:50%;background:var(--white)}
-  h1{font-size:32px;line-height:1.22;margin:0 0 10px;font-weight:750;letter-spacing:-.6px;color:var(--white)}
-  .lead{color:var(--txt-2);margin:0;max-width:600px}
-  .lead a{color:var(--white)}
+  /* ================= 主视觉 ================= */
+  .hero{padding:24px 0 22px}
+  .badge{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:2.4px;color:var(--txt-2);
+         border:1px solid var(--line-2);border-radius:999px;padding:4px 12px;margin-bottom:15px;text-transform:uppercase}
+  .badge i{width:5px;height:5px;border-radius:50%;background:var(--white);box-shadow:0 0 8px rgba(255,255,255,.7)}
+  h1{font-size:33px;line-height:1.2;margin:0 0 11px;font-weight:750;letter-spacing:-.7px;color:var(--white)}
+  .lead{color:var(--txt-2);margin:0;max-width:620px}
+  .lead a{color:var(--white);text-decoration:none;border-bottom:1px solid rgba(255,255,255,.32);transition:border-color .16s}
+  .lead a:hover{border-color:#fff}
+  .stats{display:flex;flex-wrap:wrap;gap:0;margin:18px 0 0;padding:0;list-style:none;
+         border:1px solid var(--line);border-radius:12px;overflow:hidden;background:rgba(255,255,255,.022)}
+  .stats li{flex:1;min-width:120px;padding:10px 14px;display:flex;flex-direction:column;gap:1px;
+         border-right:1px solid var(--line)}
+  .stats li:last-child{border-right:none}
+  .stats b{font-size:12.5px;color:var(--white);font-weight:650;letter-spacing:.1px}
+  .stats span{font-size:11.5px;color:var(--txt-3)}
 
-  /* ---------- 卡片 ---------- */
-  section{border:1px solid var(--line);border-radius:16px;padding:20px 20px 18px;margin-bottom:14px;
-          background:linear-gradient(168deg,var(--card-a),var(--card-b));position:relative;transition:border-color .2s,box-shadow .2s}
-  section:hover{border-color:rgba(255,255,255,.16)}
-  section.done{border-color:rgba(255,255,255,.4)}
-  section.done::after{content:"已完成";position:absolute;right:16px;top:-9px;font-size:10.5px;letter-spacing:1px;
-          color:#0a0a0a;background:var(--white);border-radius:999px;padding:2px 9px;font-weight:700}
-  section.need{border-color:rgba(255,212,121,.55);box-shadow:0 0 26px rgba(255,212,121,.08)}
-  h2{font-size:15.5px;margin:0 0 14px;display:flex;align-items:center;gap:10px;color:var(--white);font-weight:650}
-  .num{flex:none;width:23px;height:23px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
-       font-size:11.5px;font-weight:700;background:var(--white);color:#0a0a0a}
-  .rows{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
-  .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 13px;
-       border:1px solid rgba(255,255,255,.075);border-radius:10px;background:rgba(255,255,255,.028)}
+  /* ================= 步骤卡（时间轴） ================= */
+  .step{position:relative;border:1px solid var(--line);border-radius:16px;padding:19px 20px 17px 56px;margin-bottom:12px;
+        background:linear-gradient(168deg,var(--card-a),var(--card-b));
+        box-shadow:inset 0 1px 0 rgba(255,255,255,.045),0 1px 2px rgba(0,0,0,.4);
+        transition:border-color .22s,box-shadow .22s,transform .22s;animation:rise .4s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes rise{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  .step:nth-of-type(1){animation-delay:.02s}
+  .step:nth-of-type(2){animation-delay:.07s}
+  .step:nth-of-type(3){animation-delay:.12s}
+  .step:nth-of-type(4){animation-delay:.17s}
+  .step:hover{border-color:rgba(255,255,255,.17);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 8px 26px rgba(0,0,0,.3)}
+  /* 时间轴竖线 */
+  .step::before{content:"";position:absolute;left:31.5px;top:47px;bottom:-13px;width:1px;
+        background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.04));pointer-events:none}
+  .step:last-of-type::before{display:none}
+  .step.done::before{background:linear-gradient(180deg,rgba(111,227,155,.45),rgba(255,255,255,.05))}
+  .step.done{border-color:rgba(255,255,255,.22)}
+  .step.done::after{content:"已完成";position:absolute;right:15px;top:-9px;font-size:10px;letter-spacing:1.1px;
+        color:#08120c;background:linear-gradient(180deg,#eafff2,#a9f0c6);border-radius:999px;padding:2px 10px;font-weight:800;
+        box-shadow:0 2px 10px rgba(111,227,155,.22)}
+  .step.need{border-color:rgba(255,207,107,.5);box-shadow:inset 0 1px 0 rgba(255,255,255,.05),0 0 30px rgba(255,207,107,.09)}
+  .step.need::before{background:linear-gradient(180deg,rgba(255,207,107,.55),rgba(255,255,255,.05))}
+  .num{position:absolute;left:20px;top:18px;width:24px;height:24px;border-radius:50%;display:inline-flex;
+       align-items:center;justify-content:center;font-size:11.5px;font-weight:800;
+       background:rgba(255,255,255,.06);color:#dcdce4;border:1px solid var(--line-2);
+       transition:all .22s}
+  .step.done .num{background:var(--white);color:#0a0a0a;border-color:var(--white);box-shadow:0 0 0 4px rgba(255,255,255,.05)}
+  .step.need .num{background:rgba(255,207,107,.14);color:#ffe1a3;border-color:rgba(255,207,107,.6);
+       animation:pulse 2.1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,207,107,.24)}50%{box-shadow:0 0 0 6px rgba(255,207,107,0)}}
+  h2{font-size:15.5px;margin:0 0 13px;display:flex;align-items:center;gap:9px;color:var(--white);font-weight:680;letter-spacing:.1px}
+  h2 .hint{font-size:11.5px;font-weight:400;color:var(--txt-3);letter-spacing:0}
+
+  /* ================= 行 / 标签 ================= */
+  .rows{display:flex;flex-direction:column;gap:7px;margin-bottom:13px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 13px;
+       border:1px solid rgba(255,255,255,.07);border-radius:10px;background:rgba(255,255,255,.024);
+       transition:background .18s,border-color .18s}
+  .row:hover{background:rgba(255,255,255,.045);border-color:rgba(255,255,255,.12)}
   .row .b{display:flex;flex-direction:column;gap:2px;min-width:0}
-  .row .b b{font-size:13px;font-weight:600;color:#f4f4f5}
+  .row .b b{font-size:13px;font-weight:600;color:#f3f3f5}
   .row .b span{font-size:11.5px;color:var(--txt-3);word-break:break-all}
-  .tag{font-size:11.5px;padding:2px 10px;border-radius:999px;border:1px solid var(--line-2);color:#d4d4d8;white-space:nowrap;flex:none}
-  .tag.ok{background:var(--white);color:#0a0a0a;border-color:var(--white);font-weight:700}
-  .tag.no{border-style:dashed;color:var(--txt-3)}
+  .tag{font-size:11.5px;padding:3px 10px;border-radius:999px;border:1px solid var(--line-2);color:#d3d3da;white-space:nowrap;flex:none}
+  .tag.ok{background:linear-gradient(180deg,#f4fff8,#cfefdb);color:#0a1a10;border-color:transparent;font-weight:700}
+  .tag.no{border-style:dashed;color:var(--txt-3);background:transparent}
+
+  /* ================= 按钮 ================= */
   .actions{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
   .btn{display:inline-flex;align-items:center;gap:7px;text-decoration:none;font-size:13px;padding:8px 15px;border-radius:9px;
-       border:1px solid var(--line-2);color:var(--txt);background:transparent;cursor:pointer;transition:all .15s;font-family:inherit}
-  .btn:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.32)}
+       border:1px solid var(--line-2);color:var(--txt);background:rgba(255,255,255,.02);cursor:pointer;
+       transition:background .16s,border-color .16s,transform .12s,box-shadow .16s;font-family:inherit;line-height:1.4}
+  .btn:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.34)}
   .btn:active{transform:translateY(1px)}
-  .btn.primary{background:var(--white);color:#0a0a0a;border-color:var(--white);font-weight:700}
-  .btn.primary:hover{background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.1)}
-  .btn.small{padding:6px 12px;font-size:12px}
-  .btn.dim{opacity:.5}
-  .btn[disabled]{opacity:.45;cursor:default;pointer-events:none}
-  .note{font-size:12px;color:var(--txt-3);margin:11px 0 0}
-  .note b{color:#d4d4d8;font-weight:600}
-  .spin{display:inline-block;width:10px;height:10px;border:1.5px solid rgba(255,255,255,.28);border-top-color:#fff;
+  .btn:focus-visible{outline:2px solid rgba(255,255,255,.55);outline-offset:2px}
+  .btn.primary{background:linear-gradient(180deg,#ffffff,#ececf1);color:#0a0a0a;border-color:transparent;font-weight:700;
+       box-shadow:0 2px 12px rgba(255,255,255,.14)}
+  .btn.primary:hover{background:#fff;box-shadow:0 3px 18px rgba(255,255,255,.22)}
+  .btn.small{padding:6px 12px;font-size:12px;border-radius:8px}
+  .btn.dim{opacity:.45}
+  .btn[disabled]{opacity:.42;cursor:default;pointer-events:none}
+  .note{font-size:12px;color:var(--txt-3);margin:10px 0 0;line-height:1.72}
+  .note b{color:#d2d2da;font-weight:650}
+  .spin{display:inline-block;width:10px;height:10px;border:1.5px solid rgba(255,255,255,.26);border-top-color:#fff;
         border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:7px}
   @keyframes sp{to{transform:rotate(360deg)}}
-  .steps{margin:0 0 12px;padding:0;list-style:none;counter-reset:s}
-  .steps li{counter-increment:s;position:relative;padding:7px 0 7px 30px;font-size:13px;color:#c9c9d0;border-bottom:1px dashed rgba(255,255,255,.07)}
+
+  /* ================= 有序提示 ================= */
+  .steps{margin:0 0 13px;padding:0;list-style:none;counter-reset:s}
+  .steps li{counter-increment:s;position:relative;padding:8px 0 8px 30px;font-size:13px;color:#c6c6cf;
+       border-bottom:1px dashed rgba(255,255,255,.07)}
   .steps li:last-child{border-bottom:none}
-  .steps li::before{content:counter(s);position:absolute;left:0;top:7px;width:19px;height:19px;border-radius:50%;
-    border:1px solid rgba(255,255,255,.32);color:#d4d4d8;font-size:11px;font-weight:700;
-    display:inline-flex;align-items:center;justify-content:center}
-  .steps li b{color:var(--white);font-weight:600}
-  code,.mono{font-family:Consolas,"Courier New",monospace;font-size:12.5px;background:rgba(255,255,255,.08);
-    border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:1px 6px;color:var(--white);white-space:nowrap}
-  .copybar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;
-    background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);margin-bottom:10px}
-  .copybar .lbl{font-size:12px;color:var(--txt-3);flex:none}
-  .copybar .val{flex:1;min-width:140px;font-family:Consolas,"Courier New",monospace;font-size:12.5px;color:var(--white);
-    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);border-radius:6px;padding:4px 9px;
-    overflow:auto;white-space:nowrap}
-  .warnbox{display:none;margin:0 0 14px;padding:11px 13px;border-left:3px solid var(--warn);border-radius:0 9px 9px 0;
-    background:rgba(255,212,121,.07);font-size:12.5px;color:#e8e4d8;line-height:1.7}
-  .warnbox.on{display:block}
+  .steps li::before{content:counter(s);position:absolute;left:0;top:8px;width:19px;height:19px;border-radius:50%;
+       border:1px solid rgba(255,255,255,.28);color:#d3d3da;font-size:10.5px;font-weight:700;
+       display:inline-flex;align-items:center;justify-content:center}
+  .steps li b{color:var(--white);font-weight:650}
+  code,.mono{font-family:"Cascadia Mono",Consolas,"Courier New",monospace;font-size:12.5px;
+       background:rgba(255,255,255,.075);border:1px solid rgba(255,255,255,.12);border-radius:5px;
+       padding:1px 6px;color:var(--white);white-space:nowrap}
+
+  /* ================= 复制条 ================= */
+  .copybar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:9px 10px;border-radius:10px;
+       background:rgba(255,255,255,.032);border:1px solid rgba(255,255,255,.075);margin-bottom:10px}
+  .copybar .lbl{font-size:11.5px;color:var(--txt-3);flex:none}
+  .copybar .val{flex:1;min-width:138px;font-family:"Cascadia Mono",Consolas,monospace;font-size:12.5px;color:var(--white);
+       background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.1);border-radius:6px;padding:4px 9px;
+       overflow:auto;white-space:nowrap}
+  .warnbox{display:none;margin:0 0 13px;padding:11px 13px;border-left:3px solid var(--warn);border-radius:0 9px 9px 0;
+       background:rgba(255,207,107,.07);font-size:12.5px;color:#e9e5d9;line-height:1.72}
+  .warnbox.on{display:block;animation:rise .3s both}
   .warnbox b{color:#fff}
 
-  /* 第 4 步:三个刷课网站入口 */
-  .sites{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
-  @media (max-width:640px){.sites{grid-template-columns:1fr}}
-  .site{display:flex;flex-direction:column;gap:3px;position:relative;text-decoration:none;padding:13px 15px 12px;border-radius:12px;
-    border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.04);transition:all .16s;overflow:hidden}
-  .site:hover{background:rgba(255,255,255,.095);border-color:rgba(255,255,255,.34);transform:translateY(-1px)}
-  .site .nm{font-size:14px;font-weight:700;color:var(--white);letter-spacing:.3px}
+  /* ================= 站点入口 ================= */
+  .sites{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px}
+  .site{display:flex;flex-direction:column;gap:2px;position:relative;text-decoration:none;padding:12px 14px 11px 40px;
+       border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.035);
+       transition:background .18s,border-color .18s,transform .18s,box-shadow .18s;overflow:hidden}
+  .site::before{content:attr(data-k);position:absolute;left:12px;top:12px;width:20px;height:20px;border-radius:6px;
+       display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;
+       background:rgba(255,255,255,.1);color:#e7e7ee;border:1px solid var(--line-2)}
+  .site:hover{background:rgba(255,255,255,.085);border-color:rgba(255,255,255,.32);transform:translateY(-2px);
+       box-shadow:0 8px 22px rgba(0,0,0,.34)}
+  .site .nm{font-size:13.5px;font-weight:700;color:var(--white);letter-spacing:.3px}
   .site .host{font-size:11.5px;color:var(--txt-3);font-family:Consolas,monospace}
-  .site .kind{font-size:11px;color:var(--txt-2);margin-top:2px}
-  .site .go{position:absolute;right:13px;top:12px;font-size:13px;color:var(--txt-3);transition:all .16s}
+  .site .kind{font-size:11px;color:var(--txt-2);margin-top:1px}
+  .site .go{position:absolute;right:12px;top:11px;font-size:13px;color:var(--txt-3);transition:color .18s,transform .18s}
   .site:hover .go{color:#fff;transform:translateX(2px)}
 
-  /* 设置区 */
-  .setgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-  @media (max-width:720px){.setgrid{grid-template-columns:1fr}}
-  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
-  .field label{font-size:12px;color:var(--txt-3)}
-  select,input[type=text]{width:100%;font-family:inherit;font-size:13px;color:var(--txt);background:rgba(255,255,255,.05);
-    border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:8px 10px;outline:none;transition:border-color .15s}
-  select:focus,input[type=text]:focus{border-color:rgba(255,255,255,.44);background:rgba(255,255,255,.075)}
-  .msg{font-size:12px;color:var(--ok);min-height:18px}
+  /* ================= 设置区 ================= */
+  .divider{height:1px;background:linear-gradient(90deg,rgba(255,255,255,.14),rgba(255,255,255,.02),transparent);margin:32px 0 18px}
+  .sectitle{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:2.2px;color:var(--txt-3);
+       text-transform:uppercase;margin:0 0 12px}
+  .sectitle::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,.1),transparent)}
+  .setgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .setgrid section{border:1px solid var(--line);border-radius:16px;padding:18px 18px 16px;margin:0;
+       display:flex;flex-direction:column;
+       background:linear-gradient(168deg,var(--card-a),var(--card-b));
+       box-shadow:inset 0 1px 0 rgba(255,255,255,.04);transition:border-color .2s}
+  .setgrid section:hover{border-color:rgba(255,255,255,.16)}
+  .setgrid h2{margin-bottom:12px}
+  .setgrid section>.note:last-child{margin-top:auto;padding-top:10px}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .field label{font-size:11.5px;color:var(--txt-3)}
+  select,input[type=text]{width:100%;font-family:inherit;font-size:13px;color:var(--txt);
+       background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.13);border-radius:9px;
+       padding:8px 10px;outline:none;transition:border-color .16s,background .16s,box-shadow .16s}
+  select:focus,input[type=text]:focus{border-color:rgba(255,255,255,.42);background:rgba(255,255,255,.075);
+       box-shadow:0 0 0 3px rgba(255,255,255,.06)}
+  select option{background:#14141a;color:var(--txt)}
+  .msg{font-size:12px;color:var(--ok);min-height:18px;transition:color .2s}
   .msg.err{color:var(--err)}
-  .divider{height:1px;background:linear-gradient(90deg,rgba(255,255,255,.15),transparent);margin:30px 0 16px}
-  footer{color:#5d5d66;font-size:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+
+  footer{color:#5c5c66;font-size:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+       margin-top:26px;padding-top:16px;border-top:1px solid rgba(255,255,255,.055)}
+
+  /* ================= 响应式 ================= */
+  @media (max-width:720px){
+    .setgrid{grid-template-columns:1fr}
+  }
+  @media (max-width:640px){
+    .wrap{padding:0 14px 70px}
+    :root{--rail:26px}
+    h1{font-size:25px;letter-spacing:-.4px}
+    .step{padding:17px 15px 15px 48px;border-radius:14px}
+    .num{left:14px;top:16px;width:22px;height:22px;font-size:11px}
+    .step::before{left:25px;top:42px}
+    .sites{grid-template-columns:1fr}
+    .stats li{min-width:100%;border-right:none;border-bottom:1px solid var(--line)}
+    .stats li:last-child{border-bottom:none}
+    .toolbar .t{display:none}
+    .logo .name small{display:none}
+    .toolbar .btn.small{padding:6px 9px}
+    .ubar .row1{padding:12px}
+    .ubar .tx{min-width:100%}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    html{scroll-behavior:auto}
+  }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <!-- 顶栏:版本 + 更新状态 -->
+  <!-- 顶栏:品牌 / 版本 / 快捷操作 -->
   <div class="top">
     <div class="logo">
       <span class="mark">刷</span>
-      <span class="name">刷课助手<small>安装向导</small></span>
+      <span class="name">刷课助手<small>本机安装向导</small></span>
     </div>
     <span class="grow"></span>
-    <span class="vchip" id="vchip"><i></i><span id="vchipTx">检测中…</span></span>
+    <div class="toolbar">
+      <span class="vchip" id="vchip"><i></i><span id="vchipTx">检测中…</span></span>
+      <button class="btn small" id="recheck" title="重新检测本机环境"><span class="i">⟳</span><span class="t">重新检测</span></button>
+      <button class="btn small" id="updCheck" title="检查是否有新版本"><span class="i">↑</span><span class="t">检查更新</span></button>
+      <a class="btn small" id="toConsole" href="/console" target="_blank" rel="noopener" style="text-decoration:none" title="查看运行状态与运行日志"><span class="i">◉</span><span class="t">运行状态</span></a>
+    </div>
   </div>
 
   <!-- 更新条 -->
@@ -172,28 +285,35 @@
   </div>
 
   <div class="hero">
-    <div class="badge"><i></i>LOCAL SETUP · 本机检测</div>
-    <h1>一键装好,直接开刷</h1>
-    <p class="lead">自动检测本机油猴与开关状态,通过后点按钮装脚本,不用复制代码。<a href="#step4">已经装好了?直接去刷课 →</a></p>
+    <div class="badge"><i></i>Local Setup · 本机检测</div>
+    <h1>一键装好，直接开刷</h1>
+    <p class="lead">自动检测本机油猴与开关状态，通过后点按钮装脚本，不用复制代码。<a href="#step4">已经装好了？直接去刷课 →</a></p>
+    <ul class="stats">
+      <li><b>4 步</b><span>全程约 1 分钟</span></li>
+      <li><b>免复制代码</b><span>一键写入油猴</span></li>
+      <li><b>只读本机配置</b><span>数据不外传</span></li>
+    </ul>
   </div>
 
-  <section id="step1">
-    <h2><span class="num">1</span>装脚本管理器(Tampermonkey)</h2>
+  <section id="step1" class="step">
+    <span class="num">1</span>
+    <h2>装脚本管理器<span class="hint">Tampermonkey</span></h2>
     <div class="rows" id="envRows"><div class="row"><div class="b"><b><span class="spin"></span>正在检测本机浏览器…</b></div></div></div>
     <div class="actions" id="envActions"></div>
   </section>
 
-  <section id="step2">
-    <h2><span class="num">2</span>开启「允许用户脚本」</h2>
+  <section id="step2" class="step">
+    <span class="num">2</span>
+    <h2>开启「允许用户脚本」</h2>
     <div class="rows" id="permRows"><div class="row"><div class="b"><b><span class="spin"></span>正在读取扩展设置…</b></div></div></div>
     <div class="warnbox" id="permWarn">
-      <b>开关关着 → 脚本显示「已启用」但一条都不执行。</b>判断方法:油猴弹窗顶部出现黑条提示、脚本名变灰,就是这个开关没开。
+      <b>开关关着 → 脚本显示「已启用」但一条都不执行。</b>判断方法：油猴弹窗顶部出现黑条提示、脚本名变灰，就是这个开关没开。
     </div>
     <ol class="steps">
-      <li>地址栏输入 <code>edge://extensions</code>(Chrome 用 <code>chrome://extensions</code>)</li>
+      <li>地址栏输入 <code>edge://extensions</code>（Chrome 用 <code>chrome://extensions</code>）</li>
       <li>找到 <b>Tampermonkey</b> → 「<b>详细信息</b>」</li>
       <li>打开「<b>允许用户脚本</b>」开关</li>
-      <li>回到本页,3 秒内状态自动变「已开启」</li>
+      <li>回到本页，3 秒内状态自动变「已开启」</li>
     </ol>
     <div class="copybar">
       <span class="lbl">地址栏直达</span>
@@ -202,55 +322,58 @@
     </div>
   </section>
 
-  <section id="step3">
-    <h2><span class="num">3</span>装入脚本</h2>
+  <section id="step3" class="step">
+    <span class="num">3</span>
+    <h2>装入脚本</h2>
     <div class="actions">
       <a class="btn primary" href="/install/courseauto.user.js">安装「刷课助手」<span id="verMain"></span></a>
-      <a class="btn" href="/install/courseauto-webai-bridge.user.js">安装「网页 AI 桥」(可选)</a>
+      <a class="btn" href="/install/courseauto-webai-bridge.user.js">安装「网页 AI 桥」（可选）</a>
     </div>
-    <p class="note">点「安装」后油猴会弹确认页,再点一次「安装」即可;没反应 = 第 1 步没装好。</p>
-    <p class="note" id="verNote">油猴确认页顶部显示的版本号应与本页一致,不一致说明装的是旧条目。</p>
+    <p class="note">点「安装」后油猴会弹确认页，再点一次「安装」即可；没反应 = 第 1 步没装好。</p>
+    <p class="note" id="verNote">油猴确认页顶部显示的版本号应与本页一致，不一致说明装的是旧条目。</p>
   </section>
 
-  <section id="step4">
-    <h2><span class="num">4</span>开始刷课</h2>
+  <section id="step4" class="step">
+    <span class="num">4</span>
+    <h2>开始刷课</h2>
     <div class="sites">
-      <a class="site" href="https://i.chaoxing.com" target="_blank" rel="noreferrer">
+      <a class="site" data-k="学" href="https://i.chaoxing.com" target="_blank" rel="noreferrer">
         <span class="go">→</span><span class="nm">学习通</span>
         <span class="host">i.chaoxing.com</span><span class="kind">超星 · 视频/测验/作业</span>
       </a>
-      <a class="site" href="https://www.zhihuishu.com" target="_blank" rel="noreferrer">
+      <a class="site" data-k="智" href="https://www.zhihuishu.com" target="_blank" rel="noreferrer">
         <span class="go">→</span><span class="nm">智慧树</span>
         <span class="host">zhihuishu.com</span><span class="kind">知到 · 视频连播</span>
       </a>
-      <a class="site" href="https://www.yuketang.cn" target="_blank" rel="noreferrer">
+      <a class="site" data-k="雨" href="https://www.yuketang.cn" target="_blank" rel="noreferrer">
         <span class="go">→</span><span class="nm">雨课堂</span>
         <span class="host">yuketang.cn</span><span class="kind">学堂在线 · 视频/弹题</span>
       </a>
     </div>
-    <p class="note"><b>进课程页后看右下角</b>:出现「刷课助手」面板 = 装好了。首次使用点面板 ⚙,选「网页 AI」并填下面的中转地址,再点「开始」。</p>
-    <p class="note">面板没出现时按顺序查:① 第 2 步是否「已开启」→ ② 油猴图标有无数字角标 → ③ 是否课程/章节页 → ④ F12 控制台过滤「刷课助手」。</p>
-    <p class="note">用「网页 AI」答题时,别关掉本程序的黑色窗口 —— 题目靠它转发。</p>
+    <p class="note"><b>进课程页后看右下角</b>：出现「刷课助手」面板 = 装好了。首次使用点面板 ⚙，选「网页 AI」并填下面的中转地址，再点「开始」。</p>
+    <p class="note">面板没出现时按顺序查：① 第 2 步是否「已开启」→ ② 油猴图标有无数字角标 → ③ 是否课程/章节页 → ④ F12 控制台过滤「刷课助手」。</p>
+    <p class="note">用「网页 AI」答题时，别关掉本程序的黑色窗口 —— 题目靠它转发。</p>
   </section>
 
   <div class="divider"></div>
+  <p class="sectitle">本机设置</p>
 
   <div class="setgrid">
     <section>
       <h2>打开方式</h2>
       <div class="field">
-        <label>以后启动程序时,用哪个浏览器打开本页</label>
+        <label>以后启动程序时，用哪个浏览器打开本页</label>
         <select id="brSel"></select>
       </div>
       <div class="field" id="brPathField" hidden>
-        <label>自定义浏览器路径(填 .exe 全路径)</label>
+        <label>自定义浏览器路径（填 .exe 全路径）</label>
         <input type="text" id="brPath" placeholder="例如 D:\Chrome\chrome.exe" spellcheck="false">
       </div>
       <div class="actions">
         <button class="btn primary small" id="brSave">保存</button>
         <span class="msg" id="brMsg"></span>
       </div>
-      <p class="note">想彻底不弹浏览器就选「不自动打开」,启动后把窗口里的地址复制到任意浏览器即可。改完下次启动生效。</p>
+      <p class="note">想彻底不弹浏览器就选「不自动打开」，启动后把窗口里的地址复制到任意浏览器即可。改完下次启动生效。</p>
     </section>
 
     <section>
@@ -260,17 +383,14 @@
         <span class="val" id="relayUrl">http://127.0.0.1:8790</span>
         <button class="btn small" id="copyRelay">复制</button>
       </div>
-      <p class="note">网页 AI 模式靠本程序转发请求,地址要和窗口里显示的一致。端口被占用时程序会用 8791,以窗口提示为准。</p>
+      <p class="note">网页 AI 模式靠本程序转发请求，地址要和窗口里显示的一致。端口被占用时程序会用 8791，以窗口提示为准。</p>
       <p class="note" id="verAll"></p>
     </section>
   </div>
 
   <footer>
-    <span>只读本机浏览器配置目录,数据不外传。</span>
-    <span class="actions">
-      <button class="btn small" id="recheck">重新检测</button>
-      <button class="btn small" id="updCheck">检查更新</button>
-    </span>
+    <span>只读本机浏览器配置目录，数据不外传。</span>
+    <span>刷课助手 · 本地运行，无需联网权限</span>
   </footer>
 </div>
 

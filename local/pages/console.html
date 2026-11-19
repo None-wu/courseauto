@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>运行状态 · 刷课助手</title>
+<style>
+  :root{
+    --bg:#0d1012; --bg-2:#12161a; --card:#141a1e; --card-2:#181f24;
+    --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12);
+    --white:#eef2f4; --txt:#c9d2d8; --txt-2:#8d9aa3; --txt-3:#5f6b73;
+    --ok:#6fe39b; --warn:#ffcf6b; --err:#ff7b72; --info:#7cc4ff; --net:#8fdcff; --sys:#9aa7ff;
+    --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Consolas,"Courier New",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(900px 420px at 12% -10%,rgba(111,227,155,.07),transparent 60%),
+      radial-gradient(760px 380px at 92% -6%,rgba(124,196,255,.07),transparent 60%),
+      var(--bg);
+    color:var(--txt);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+    -webkit-font-smoothing:antialiased;min-height:100vh;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:26px 20px 40px}
+
+  /* 顶栏 */
+  .top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:20px}
+  .logo{display:flex;align-items:center;gap:11px}
+  .logo .mark{
+    width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-size:16px;color:#0c1113;
+    background:linear-gradient(145deg,#8ff0b6,#5ecf8b);box-shadow:0 4px 14px rgba(94,207,139,.28)
+  }
+  .logo .name{display:flex;flex-direction:column;line-height:1.25}
+  .logo .name b{font-size:15.5px;color:var(--white);letter-spacing:.2px}
+  .logo .name small{font-size:11.5px;color:var(--txt-3);letter-spacing:.4px}
+  .grow{flex:1}
+  .toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .vchip{
+    display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--txt-2);
+    border:1px solid var(--line);border-radius:999px;padding:6px 11px;background:rgba(255,255,255,.02)
+  }
+  .vchip i{width:6px;height:6px;border-radius:50%;background:var(--txt-3);display:inline-block;flex:none;transition:background .2s}
+  .vchip.ok i{background:var(--ok);box-shadow:0 0 9px rgba(111,227,155,.65)}
+  .vchip.ok{color:#cfd8d2}
+  .vchip.bad i{background:var(--err);box-shadow:0 0 9px rgba(255,123,114,.6)}
+  .btn{
+    display:inline-flex;align-items:center;gap:6px;font-size:13px;font-family:inherit;cursor:pointer;
+    color:var(--txt);background:rgba(255,255,255,.045);border:1px solid var(--line-2);
+    border-radius:9px;padding:8px 13px;transition:.16s;white-space:nowrap
+  }
+  .btn:hover{background:rgba(255,255,255,.09);color:var(--white)}
+  .btn:active{transform:translateY(1px)}
+  .btn.small{padding:6px 11px;font-size:12.5px;border-radius:8px}
+  .btn.dim{color:var(--txt-2)}
+  .btn.danger:hover{background:rgba(255,123,114,.15);border-color:rgba(255,123,114,.45);color:#ffb3ad}
+  .btn.on{background:rgba(124,196,255,.16);border-color:rgba(124,196,255,.45);color:#cfe9ff}
+
+  /* 首屏大卡片 */
+  .hero{
+    border:1px solid var(--line);border-radius:16px;padding:20px 22px;margin-bottom:14px;
+    background:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,.012));
+    display:flex;align-items:center;gap:18px;flex-wrap:wrap
+  }
+  .hero .dot{width:11px;height:11px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(111,227,155,.14),0 0 16px rgba(111,227,155,.55);flex:none}
+  .hero.down .dot{background:var(--err);box-shadow:0 0 0 4px rgba(255,123,114,.14),0 0 16px rgba(255,123,114,.5)}
+  .hero .tt{flex:1;min-width:220px}
+  .hero .tt b{display:block;font-size:17px;color:var(--white);letter-spacing:.2px}
+  .hero .tt span{display:block;font-size:12.5px;color:var(--txt-2);margin-top:4px}
+  .hero .big{text-align:right}
+  .hero .big b{font-family:var(--mono);font-size:20px;color:var(--white);letter-spacing:.5px}
+  .hero .big small{display:block;font-size:11.5px;color:var(--txt-3);margin-top:2px}
+
+  /* 指标网格 */
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .cell{
+    border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--card);
+    min-width:0
+  }
+  .cell .k{font-size:11.5px;color:var(--txt-3);letter-spacing:.5px;margin-bottom:6px}
+  .cell .v{font-size:13.5px;color:var(--white);word-break:break-all;font-weight:600}
+  .cell .v.mono{font-family:var(--mono);font-weight:500;font-size:13px}
+  .cell .s{font-size:11.5px;color:var(--txt-3);margin-top:4px;word-break:break-all}
+  .cell.warn .v{color:var(--warn)}
+  .cell.ok .v{color:var(--ok)}
+  .cell.bad .v{color:var(--err)}
+
+  /* 日志面板 */
+  .panel{border:1px solid var(--line);border-radius:16px;background:var(--card);overflow:hidden}
+  .panel .head{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:12px 14px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.018)
+  }
+  .panel .head .t{font-size:13px;color:var(--white);font-weight:700;letter-spacing:.3px}
+  .panel .head .sp{flex:1}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{
+    font-size:12px;padding:5px 10px;border-radius:999px;cursor:pointer;
+    border:1px solid var(--line);color:var(--txt-2);background:transparent;font-family:inherit;transition:.15s
+  }
+  .chip:hover{color:var(--white);border-color:var(--line-2)}
+  .chip.on{background:rgba(124,196,255,.14);border-color:rgba(124,196,255,.4);color:#cfe9ff}
+  #logBox{
+    height:min(50vh,420px);overflow:auto;padding:10px 0 14px;font-family:var(--mono);font-size:12.5px;line-height:1.85;
+    scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent
+  }
+  #logBox::-webkit-scrollbar{width:9px}
+  #logBox::-webkit-scrollbar-thumb{background:rgba(255,255,255,.16);border-radius:6px}
+  .ln{display:flex;gap:10px;padding:1px 16px;white-space:pre-wrap;word-break:break-word}
+  .ln:hover{background:rgba(255,255,255,.028)}
+  .ln .tm{color:var(--txt-3);flex:none;user-select:none}
+  .ln .lv{flex:none;width:34px;text-align:center;font-size:11px;border-radius:4px;height:18px;line-height:18px;margin-top:2px}
+  .ln .tx{color:var(--txt);min-width:0}
+  .ln.info .lv{color:var(--txt-2);background:rgba(255,255,255,.05)}
+  .ln.ok .lv{color:var(--ok);background:rgba(111,227,155,.12)}
+  .ln.warn .lv{color:var(--warn);background:rgba(255,207,107,.12)}
+  .ln.warn .tx{color:#f0e6cf}
+  .ln.err .lv{color:var(--err);background:rgba(255,123,114,.13)}
+  .ln.err .tx{color:#ffc9c5}
+  .ln.net .lv{color:var(--net);background:rgba(143,220,255,.12)}
+  .ln.sys .lv{color:var(--sys);background:rgba(154,167,255,.12)}
+  .empty{padding:34px 16px;text-align:center;color:var(--txt-3);font-size:12.5px}
+  .foot{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    padding:10px 14px;border-top:1px solid var(--line);font-size:11.5px;color:var(--txt-3)
+  }
+  .foot code{font-family:var(--mono);color:var(--txt-2);word-break:break-all}
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);opacity:0;pointer-events:none;
+    background:#1c2429;border:1px solid var(--line-2);color:var(--white);font-size:12.5px;
+    padding:9px 15px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.45);transition:.22s;z-index:9
+  }
+  .toast.on{opacity:1;transform:translate(-50%,0)}
+
+  @media (max-width:900px){
+    .grid{grid-template-columns:repeat(2,1fr)}
+    .hero .big{text-align:left}
+  }
+  @media (max-width:560px){
+    .wrap{padding:18px 13px 30px}
+    .grid{grid-template-columns:1fr}
+    .logo .name small{display:none}
+    #logBox{height:44vh;font-size:12px}
+    .ln{gap:7px;padding:1px 11px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 顶栏 -->
+  <div class="top">
+    <div class="logo">
+      <span class="mark">刷</span>
+      <span class="name"><b>刷课助手</b><small>运行状态</small></span>
+    </div>
+    <span class="grow"></span>
+    <div class="toolbar">
+      <span class="vchip" id="live"><i></i><span id="liveTx">连接中…</span></span>
+      <button class="btn small" id="toSetup" title="回到安装向导页">安装向导</button>
+      <button class="btn small dim" id="toConsole" title="重新拉起本状态页">刷新页面</button>
+      <button class="btn small danger" id="quit" title="结束本进程(退出后答题中转会断开)">退出程序</button>
+    </div>
+  </div>
+
+  <!-- 主状态 -->
+  <div class="hero" id="hero">
+    <span class="dot"></span>
+    <div class="tt">
+      <b id="heroTitle">刷课助手正在本机运行</b>
+      <span id="heroDesc">答题中转依赖本进程,请保持运行;关闭本网页不会退出程序。</span>
+    </div>
+    <div class="big">
+      <b id="upTime">--:--:--</b>
+      <small>已运行</small>
+    </div>
+  </div>
+
+  <!-- 指标 -->
+  <div class="grid">
+    <div class="cell" id="cPort">
+      <div class="k">本机服务</div>
+      <div class="v mono" id="portTx">--</div>
+      <div class="s" id="portSub">中转地址前缀</div>
+    </div>
+    <div class="cell" id="cVer">
+      <div class="k">程序版本</div>
+      <div class="v mono" id="verTx">--</div>
+      <div class="s" id="verSub">本机 exe</div>
+    </div>
+    <div class="cell" id="cUpd">
+      <div class="k">版本更新</div>
+      <div class="v" id="updTx">--</div>
+      <div class="s" id="updSub">启动时自动检测</div>
+    </div>
+    <div class="cell" id="cRelay">
+      <div class="k">AI 答题中转</div>
+      <div class="v" id="relayTx">0 / 0</div>
+      <div class="s" id="relaySub">收题 / 已回传</div>
+    </div>
+    <div class="cell" id="cOpen">
+      <div class="k">向导打开方式</div>
+      <div class="v" id="openTx">--</div>
+      <div class="s" id="openSub">可在向导页修改</div>
+    </div>
+    <div class="cell" id="cPid">
+      <div class="k">进程</div>
+      <div class="v mono" id="pidTx">--</div>
+      <div class="s" id="pidSub">--</div>
+    </div>
+    <div class="cell" id="cMode">
+      <div class="k">启动形态</div>
+      <div class="v" id="modeTx">--</div>
+      <div class="s" id="modeSub">--</div>
+    </div>
+    <div class="cell" id="cLog">
+      <div class="k">日志留档</div>
+      <div class="v" id="logN">0 条</div>
+      <div class="s" id="logSub">最近 400 条保留在内存</div>
+    </div>
+  </div>
+
+  <!-- 日志 -->
+  <div class="panel">
+    <div class="head">
+      <span class="t">运行日志</span>
+      <span class="sp"></span>
+      <div class="chips" id="chips">
+        <button class="chip on" data-lv="all">全部</button>
+        <button class="chip" data-lv="sys">状态</button>
+        <button class="chip" data-lv="net">中转</button>
+        <button class="chip" data-lv="warn">提示</button>
+        <button class="chip" data-lv="err">异常</button>
+      </div>
+      <button class="btn small" id="pause" title="暂停/继续接收日志">暂停</button>
+      <button class="btn small dim" id="clear" title="只清空本页显示,不影响进程">清空</button>
+      <button class="btn small dim" id="copy" title="复制当前显示的全部日志">复制</button>
+      <button class="btn small dim" id="save" title="保存为 txt 文件">下载</button>
+    </div>
+    <div id="logBox"><div class="empty" id="logEmpty">正在读取日志…</div></div>
+    <div class="foot">
+      <span>日志同时写入</span><code id="logFileTx">--</code>
+      <span class="sp" style="flex:1"></span>
+      <span id="tickTx">每秒刷新</span>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var box = $('logBox');
+  var state = { since: 0, paused: false, filter: 'all', rows: [], dead: false, startedAt: Date.now(), serverUptime: 0, lastSync: Date.now() };
+
+  function toast(tx) {
+    var el = $('toast');
+    el.textContent = tx;
+    el.classList.add('on');
+    clearTimeout(el._t);
+    el._t = setTimeout(function () { el.classList.remove('on'); }, 1900);
+  }
+
+  function pad(n) { return n < 10 ? '0' + n : '' + n; }
+
+  function hms(ts) {
+    var d = new Date(ts);
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
+  }
+
+  function dur(ms) {
+    if (!(ms >= 0)) return '--:--:--';
+    var s = Math.floor(ms / 1000);
+    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+    return pad(h) + ':' + pad(m) + ':' + pad(s % 60);
+  }
+
+  var LV_TXT = { info: 'INFO', ok: 'OK', warn: 'WARN', err: 'ERR', net: 'NET', sys: 'SYS' };
+
+  function renderRows() {
+    var list = state.rows.filter(function (r) { return state.filter === 'all' || r.lv === state.filter; });
+    if (!list.length) {
+      box.innerHTML = '<div class="empty">' + (state.rows.length ? '当前筛选下没有日志' : '暂无日志') + '</div>';
+      return;
+    }
+    var buf = [];
+    for (var i = 0; i < list.length; i++) {
+      var r = list[i];
+      var lv = r.lv || 'info';
+      buf.push(
+        '<div class="ln ' + lv + '"><span class="tm">' + hms(r.t) + '</span>' +
+        '<span class="lv">' + (LV_TXT[lv] || lv.toUpperCase()) + '</span>' +
+        '<span class="tx">' + esc(r.tx) + '</span></div>'
+      );
+    }
+    box.innerHTML = buf.join('');
+    box.scrollTop = box.scrollHeight;
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function applyStatus(d) {
+    state.dead = false;
+    state.serverUptime = d.uptime || 0;
+    $('live').className = 'vchip ok';
+    $('liveTx').textContent = '运行中';
+    $('hero').classList.remove('down');
+    $('heroTitle').textContent = d.title + ' v' + d.version + ' 正在本机运行';
+    $('heroDesc').textContent = d.headless
+      ? '以无窗口方式启动(没有黑色命令行窗口),启动信息与日志都在本页。答题中转依赖本进程,请保持运行。'
+      : '本进程需保持运行以转发答题请求;关闭本网页不会退出程序。';
+    $('portTx').textContent = '127.0.0.1:' + d.port;
+    $('portSub').textContent = d.url;
+    $('verTx').textContent = 'v' + d.version;
+    $('verSub').textContent = '端口 ' + d.port + ' · ' + (d.platform === 'win32' ? 'Windows' : d.platform);
+
+    var u = d.update || {};
+    $('updTx').textContent = u.text || '检测中…';
+    $('cUpd').className = 'cell' + (u.state === 'has-update' ? ' warn' : u.state === 'unreachable' ? ' bad' : u.state === 'up-to-date' ? ' ok' : '');
+    $('updSub').textContent = u.state === 'has-update' ? ('最新 v' + u.latest + ',可在向导页下载') : '启动时自动检测';
+
+    var rl = d.relay || { asked: 0, answered: 0 };
+    $('relayTx').textContent = rl.asked + ' / ' + rl.answered;
+    $('relaySub').textContent = '收题 ' + rl.asked + ' 条,已回传 ' + rl.answered + ' 条';
+    $('cRelay').className = 'cell' + (rl.asked > rl.answered ? ' warn' : '');
+
+    $('openTx').textContent = (d.browser && d.browser.label) || '系统默认';
+    $('openSub').textContent = 'key: ' + ((d.browser && d.browser.key) || 'auto');
+
+    $('pidTx').textContent = d.pid;
+    $('pidSub').textContent = '启动于 ' + hms(d.startedAt);
+    $('modeTx').textContent = d.headless ? '无窗口(前端承载)' : '带控制台窗口';
+    $('modeSub').textContent = d.headless ? '双击不出黑窗' : '开发/调试模式';
+    $('logFileTx').textContent = d.logFile || '--';
+  }
+
+  function applyDead() {
+    if (state.dead) return;
+    state.dead = true;
+    $('live').className = 'vchip bad';
+    $('liveTx').textContent = '已断开';
+    $('hero').classList.add('down');
+    $('heroTitle').textContent = '本机服务已停止';
+    $('heroDesc').textContent = '进程可能已退出(或换了端口)。重新双击刷课助手即可再次启动。';
+  }
+
+  function pullStatus() {
+    fetch('/api/app/status', { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(applyStatus)
+      .catch(applyDead);
+  }
+
+  function pullLog() {
+    if (state.paused) return;
+    fetch('/api/app/log?since=' + state.since, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) return;
+        if (d.lines && d.lines.length) {
+          state.rows = state.rows.concat(d.lines);
+          if (state.rows.length > 1200) state.rows = state.rows.slice(-1200);
+          state.since = d.lines[d.lines.length - 1].seq;
+          renderRows();
+        }
+        $('logN').textContent = (d.seq || 0) + ' 条';
+        $('logSub').textContent = '缓冲上限 ' + ((d.keep || 400)) + ' 条,留档见下方路径';
+      })
+      .catch(applyDead);
+  }
+
+  // 事件
+  $('toSetup').onclick = function () { location.href = '/setup'; };
+  $('toConsole').onclick = function () { location.reload(); };
+  $('pause').onclick = function () {
+    state.paused = !state.paused;
+    this.textContent = state.paused ? '继续' : '暂停';
+    this.classList.toggle('on', state.paused);
+    $('tickTx').textContent = state.paused ? '已暂停(继续后补齐)' : '每秒刷新';
+    if (!state.paused) pullLog();
+  };
+  $('clear').onclick = function () {
+    state.rows = [];
+    renderRows();
+    toast('已清空本页显示');
+  };
+  $('copy').onclick = function () {
+    var txt = state.rows.map(function (r) { return hms(r.t) + ' [' + (LV_TXT[r.lv] || r.lv) + '] ' + r.tx; }).join('\n');
+    if (!txt) { toast('没有可复制的日志'); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(function () { toast('已复制 ' + state.rows.length + ' 条日志'); },
+        function () { toast('浏览器不允许自动复制,请手动选择'); });
+    } else {
+      toast('浏览器不支持自动复制');
+    }
+  };
+  $('save').onclick = function () {
+    var txt = state.rows.map(function (r) { return hms(r.t) + ' [' + (LV_TXT[r.lv] || r.lv) + '] ' + r.tx; }).join('\r\n');
+    if (!txt) { toast('没有可下载的日志'); return; }
+    var blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '刷课助手-日志-' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.txt';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+    toast('已保存日志文件');
+  };
+
+  var quitArmed = 0;
+  $('quit').onclick = function () {
+    var btn = this;
+    if (!quitArmed) {
+      quitArmed = 1;
+      btn.textContent = '再点一次确认';
+      btn.classList.add('on');
+      setTimeout(function () { quitArmed = 0; btn.textContent = '退出程序'; btn.classList.remove('on'); }, 3200);
+      return;
+    }
+    quitArmed = 0;
+    btn.disabled = true;
+    btn.textContent = '正在退出…';
+    fetch('/api/app/quit', { method: 'POST' })
+      .then(function () { toast('程序已退出,可关闭本页'); })
+      .catch(function () { toast('程序已退出,可关闭本页'); });
+    setTimeout(function () {
+      state.paused = true;
+      applyDead();
+    }, 500);
+  };
+
+  var chips = $('chips').querySelectorAll('.chip');
+  for (var ci = 0; ci < chips.length; ci++) {
+    chips[ci].onclick = function () {
+      for (var k = 0; k < chips.length; k++) chips[k].classList.remove('on');
+      this.classList.add('on');
+      state.filter = this.getAttribute('data-lv');
+      renderRows();
+    };
+  }
+
+  // 计时:本地秒表 + 服务端 uptime 校准
+  setInterval(function () {
+    $('upTime').textContent = dur(state.serverUptime + Math.max(0, Date.now() - (state.lastSync || Date.now())));
+  }, 1000);
+
+  // 轮询
+  pullStatus();
+  pullLog();
+  setInterval(function () { pullStatus(); state.lastSync = Date.now(); }, 5000);
+  setInterval(pullLog, 1000);
+})();
+</script>
+</body>
+</html>
