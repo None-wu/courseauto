@@ -5,92 +5,180 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>刷课助手 · 一键安装</title>
 <style>
-  :root{color-scheme:dark}
+  :root{
+    color-scheme:dark;
+    --bg:#08080a; --card-a:rgba(26,26,30,.92); --card-b:rgba(11,11,13,.94);
+    --line:rgba(255,255,255,.1); --line-2:rgba(255,255,255,.18);
+    --txt:#e9e9ee; --txt-2:#a0a0aa; --txt-3:#75757f; --white:#fafafa;
+    --ok:#8ee6b0; --warn:#ffd479; --err:#ff9a9a;
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:#08080a;color:#e8e8ea;font:14px/1.65 "Microsoft YaHei",system-ui,sans-serif;
-       background-image:radial-gradient(1200px 600px at 20% -10%,rgba(255,255,255,0.07),transparent 60%),
-                        radial-gradient(900px 500px at 100% 0%,rgba(255,255,255,0.05),transparent 55%);
-       min-height:100vh}
-  .wrap{max-width:820px;margin:0 auto;padding:56px 24px 80px}
-  .badge{display:inline-flex;align-items:center;gap:8px;font-size:12px;letter-spacing:2px;color:#a1a1aa;
-         border:1px solid rgba(255,255,255,0.16);border-radius:999px;padding:4px 12px;margin-bottom:18px}
-  .badge i{width:6px;height:6px;border-radius:50%;background:#fff;display:inline-block}
-  h1{font-size:34px;line-height:1.25;margin:0 0 10px;font-weight:700;letter-spacing:-0.5px;color:#fafafa}
-  .lead{color:#9a9aa3;margin:0 0 40px;max-width:620px}
-  section{border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:22px 22px 20px;margin-bottom:16px;
-          background:linear-gradient(170deg,rgba(24,24,27,0.9),rgba(12,12,14,0.9));position:relative}
-  section.done{border-color:rgba(255,255,255,0.42);box-shadow:0 0 0 1px rgba(255,255,255,0.08) inset}
-  h2{font-size:16px;margin:0 0 14px;display:flex;align-items:center;gap:10px;color:#fafafa;font-weight:600}
-  .num{flex:none;width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
-       font-size:12px;font-weight:700;background:#fafafa;color:#0a0a0a}
-  section.done .num{background:#fff}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.65 "Microsoft YaHei",system-ui,-apple-system,sans-serif;
+       background-image:radial-gradient(1200px 600px at 16% -12%,rgba(255,255,255,.075),transparent 60%),
+                        radial-gradient(900px 520px at 100% -4%,rgba(255,255,255,.05),transparent 55%);
+       background-attachment:fixed;min-height:100vh;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:880px;margin:0 auto;padding:0 22px 88px}
+
+  /* ---------- 顶栏 ---------- */
+  .top{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:12px;padding:14px 0 12px;
+       backdrop-filter:blur(14px);background:linear-gradient(180deg,rgba(8,8,10,.95),rgba(8,8,10,.72) 70%,transparent)}
+  .logo{display:flex;align-items:center;gap:10px;min-width:0}
+  .logo .mark{width:26px;height:26px;border-radius:8px;background:var(--white);color:#0a0a0a;font-weight:800;
+       display:flex;align-items:center;justify-content:center;font-size:13px;flex:none}
+  .logo .name{font-size:14px;font-weight:700;color:var(--white);letter-spacing:.2px;white-space:nowrap}
+  .logo .name small{font-weight:400;color:var(--txt-3);margin-left:6px;font-size:12px}
+  .grow{flex:1}
+  .vchip{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--txt-2);border:1px solid var(--line);
+       border-radius:999px;padding:4px 11px;white-space:nowrap;background:rgba(255,255,255,.03)}
+  .vchip i{width:6px;height:6px;border-radius:50%;background:var(--txt-3);display:inline-block;flex:none}
+  .vchip.ok i{background:var(--ok);box-shadow:0 0 8px rgba(142,230,176,.55)}
+  .vchip.new i{background:var(--warn);box-shadow:0 0 8px rgba(255,212,121,.6)}
+  .vchip.bad i{background:var(--err)}
+
+  /* ---------- 更新条 ---------- */
+  .ubar{margin:6px 0 16px;border:1px solid var(--line-2);border-radius:14px;overflow:hidden;
+        background:linear-gradient(160deg,rgba(38,38,44,.95),rgba(16,16,19,.95));position:relative}
+  .ubar[hidden]{display:none}
+  .ubar .row1{display:flex;align-items:center;gap:14px;padding:14px 16px;flex-wrap:wrap}
+  .ubar .ic{width:34px;height:34px;border-radius:10px;flex:none;display:flex;align-items:center;justify-content:center;
+        font-size:15px;background:rgba(255,255,255,.09);border:1px solid var(--line-2)}
+  .ubar .tx{min-width:180px;flex:1}
+  .ubar .tx b{display:block;font-size:13.5px;color:var(--white);font-weight:700}
+  .ubar .tx span{display:block;font-size:12px;color:var(--txt-2);margin-top:2px;word-break:break-all}
+  .ubar .acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .ubar .bar{height:3px;background:rgba(255,255,255,.08);margin:0 16px 14px;border-radius:3px;overflow:hidden}
+  .ubar .bar[hidden]{display:none}
+  .ubar .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#fff,rgba(255,255,255,.65));
+        transition:width .3s ease;border-radius:3px}
+  .ubar.muted{background:rgba(255,255,255,.03);border-color:var(--line)}
+
+  /* ---------- 主视觉 ---------- */
+  .hero{padding:26px 0 22px}
+  .badge{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;letter-spacing:2px;color:var(--txt-2);
+         border:1px solid var(--line-2);border-radius:999px;padding:4px 12px;margin-bottom:16px}
+  .badge i{width:6px;height:6px;border-radius:50%;background:var(--white)}
+  h1{font-size:32px;line-height:1.22;margin:0 0 10px;font-weight:750;letter-spacing:-.6px;color:var(--white)}
+  .lead{color:var(--txt-2);margin:0;max-width:600px}
+  .lead a{color:var(--white)}
+
+  /* ---------- 卡片 ---------- */
+  section{border:1px solid var(--line);border-radius:16px;padding:20px 20px 18px;margin-bottom:14px;
+          background:linear-gradient(168deg,var(--card-a),var(--card-b));position:relative;transition:border-color .2s,box-shadow .2s}
+  section:hover{border-color:rgba(255,255,255,.16)}
+  section.done{border-color:rgba(255,255,255,.4)}
+  section.done::after{content:"已完成";position:absolute;right:16px;top:-9px;font-size:10.5px;letter-spacing:1px;
+          color:#0a0a0a;background:var(--white);border-radius:999px;padding:2px 9px;font-weight:700}
+  section.need{border-color:rgba(255,212,121,.55);box-shadow:0 0 26px rgba(255,212,121,.08)}
+  h2{font-size:15.5px;margin:0 0 14px;display:flex;align-items:center;gap:10px;color:var(--white);font-weight:650}
+  .num{flex:none;width:23px;height:23px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+       font-size:11.5px;font-weight:700;background:var(--white);color:#0a0a0a}
   .rows{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
-  .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 14px;
-       border:1px solid rgba(255,255,255,0.08);border-radius:10px;background:rgba(255,255,255,0.03)}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:11px 13px;
+       border:1px solid rgba(255,255,255,.075);border-radius:10px;background:rgba(255,255,255,.028)}
   .row .b{display:flex;flex-direction:column;gap:2px;min-width:0}
   .row .b b{font-size:13px;font-weight:600;color:#f4f4f5}
-  .row .b span{font-size:11.5px;color:#86868f}
-  .tag{font-size:11.5px;padding:2px 10px;border-radius:999px;border:1px solid rgba(255,255,255,0.2);color:#d4d4d8;white-space:nowrap}
-  .tag.ok{background:#fafafa;color:#0a0a0a;border-color:#fafafa;font-weight:600}
-  .tag.no{border-style:dashed;color:#9a9aa3}
-  .actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-  .btn{display:inline-flex;align-items:center;gap:8px;text-decoration:none;font-size:13px;padding:9px 16px;border-radius:9px;
-       border:1px solid rgba(255,255,255,0.22);color:#e8e8ea;background:transparent;cursor:pointer;transition:all .15s;font-family:inherit}
-  .btn:hover{background:rgba(255,255,255,0.1)}
-  .btn.primary{background:#fafafa;color:#0a0a0a;border-color:#fafafa;font-weight:700}
-  .btn.primary:hover{background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,0.1)}
+  .row .b span{font-size:11.5px;color:var(--txt-3);word-break:break-all}
+  .tag{font-size:11.5px;padding:2px 10px;border-radius:999px;border:1px solid var(--line-2);color:#d4d4d8;white-space:nowrap;flex:none}
+  .tag.ok{background:var(--white);color:#0a0a0a;border-color:var(--white);font-weight:700}
+  .tag.no{border-style:dashed;color:var(--txt-3)}
+  .actions{display:flex;flex-wrap:wrap;gap:9px;align-items:center}
+  .btn{display:inline-flex;align-items:center;gap:7px;text-decoration:none;font-size:13px;padding:8px 15px;border-radius:9px;
+       border:1px solid var(--line-2);color:var(--txt);background:transparent;cursor:pointer;transition:all .15s;font-family:inherit}
+  .btn:hover{background:rgba(255,255,255,.09);border-color:rgba(255,255,255,.32)}
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:var(--white);color:#0a0a0a;border-color:var(--white);font-weight:700}
+  .btn.primary:hover{background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.1)}
   .btn.small{padding:6px 12px;font-size:12px}
-  .note{font-size:12px;color:#86868f;margin:12px 0 0;padding-left:1px}
+  .btn.dim{opacity:.5}
+  .btn[disabled]{opacity:.45;cursor:default;pointer-events:none}
+  .note{font-size:12px;color:var(--txt-3);margin:11px 0 0}
   .note b{color:#d4d4d8;font-weight:600}
-  a.inline{color:#fafafa;text-decoration:underline;text-underline-offset:3px}
-  .spin{display:inline-block;width:10px;height:10px;border:1.5px solid rgba(255,255,255,0.3);border-top-color:#fff;
-        border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:6px}
+  .spin{display:inline-block;width:10px;height:10px;border:1.5px solid rgba(255,255,255,.28);border-top-color:#fff;
+        border-radius:50%;animation:sp .8s linear infinite;vertical-align:-1px;margin-right:7px}
   @keyframes sp{to{transform:rotate(360deg)}}
   .steps{margin:0 0 12px;padding:0;list-style:none;counter-reset:s}
-  .steps li{counter-increment:s;position:relative;padding:7px 0 7px 30px;font-size:13px;color:#c9c9d0;border-bottom:1px dashed rgba(255,255,255,0.07)}
+  .steps li{counter-increment:s;position:relative;padding:7px 0 7px 30px;font-size:13px;color:#c9c9d0;border-bottom:1px dashed rgba(255,255,255,.07)}
   .steps li:last-child{border-bottom:none}
   .steps li::before{content:counter(s);position:absolute;left:0;top:7px;width:19px;height:19px;border-radius:50%;
-    border:1px solid rgba(255,255,255,0.35);color:#d4d4d8;font-size:11px;font-weight:700;
+    border:1px solid rgba(255,255,255,.32);color:#d4d4d8;font-size:11px;font-weight:700;
     display:inline-flex;align-items:center;justify-content:center}
-  .steps li b{color:#fafafa;font-weight:600}
-  code,.mono{font-family:Consolas,"Courier New",monospace;font-size:12.5px;background:rgba(255,255,255,0.09);
-    border:1px solid rgba(255,255,255,0.13);border-radius:5px;padding:1px 6px;color:#fafafa;white-space:nowrap}
-  .copybar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;
-    background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.09);margin-bottom:12px}
-  .copybar .lbl{font-size:12px;color:#86868f;flex:none}
-  .copybar .val{flex:1;min-width:150px;font-family:Consolas,"Courier New",monospace;font-size:12.5px;color:#fafafa;
-    background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.12);border-radius:6px;padding:4px 9px;
+  .steps li b{color:var(--white);font-weight:600}
+  code,.mono{font-family:Consolas,"Courier New",monospace;font-size:12.5px;background:rgba(255,255,255,.08);
+    border:1px solid rgba(255,255,255,.12);border-radius:5px;padding:1px 6px;color:var(--white);white-space:nowrap}
+  .copybar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;
+    background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);margin-bottom:10px}
+  .copybar .lbl{font-size:12px;color:var(--txt-3);flex:none}
+  .copybar .val{flex:1;min-width:140px;font-family:Consolas,"Courier New",monospace;font-size:12.5px;color:var(--white);
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.11);border-radius:6px;padding:4px 9px;
     overflow:auto;white-space:nowrap}
-  .warnbox{display:none;margin:0 0 14px;padding:12px 14px;border-left:3px solid #fafafa;border-radius:0 9px 9px 0;
-    background:rgba(255,255,255,0.07);font-size:12.5px;color:#e4e4e7;line-height:1.7}
+  .warnbox{display:none;margin:0 0 14px;padding:11px 13px;border-left:3px solid var(--warn);border-radius:0 9px 9px 0;
+    background:rgba(255,212,121,.07);font-size:12.5px;color:#e8e4d8;line-height:1.7}
   .warnbox.on{display:block}
   .warnbox b{color:#fff}
-  section.need{border-color:rgba(255,255,255,0.5);box-shadow:0 0 0 1px rgba(255,255,255,0.1) inset,0 0 24px rgba(255,255,255,0.06)}
-  footer{color:#5f5f66;font-size:12px;margin-top:26px}
-  .divider{height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.16),transparent);margin:34px 0 18px}
+
   /* 第 4 步:三个刷课网站入口 */
-  .sites{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .sites{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
   @media (max-width:640px){.sites{grid-template-columns:1fr}}
-  .site{display:flex;flex-direction:column;gap:4px;position:relative;text-decoration:none;padding:14px 15px 13px;border-radius:12px;
-    border:1px solid rgba(255,255,255,0.14);background:rgba(255,255,255,0.045);transition:all .16s;overflow:hidden}
-  .site:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.34);transform:translateY(-1px)}
-  .site .nm{font-size:14px;font-weight:700;color:#fafafa;letter-spacing:.3px}
-  .site .host{font-size:11.5px;color:#8a8a93;font-family:Consolas,"Courier New",monospace}
-  .site .go{position:absolute;right:13px;top:13px;font-size:13px;color:#a1a1aa;transition:all .16s}
+  .site{display:flex;flex-direction:column;gap:3px;position:relative;text-decoration:none;padding:13px 15px 12px;border-radius:12px;
+    border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.04);transition:all .16s;overflow:hidden}
+  .site:hover{background:rgba(255,255,255,.095);border-color:rgba(255,255,255,.34);transform:translateY(-1px)}
+  .site .nm{font-size:14px;font-weight:700;color:var(--white);letter-spacing:.3px}
+  .site .host{font-size:11.5px;color:var(--txt-3);font-family:Consolas,monospace}
+  .site .kind{font-size:11px;color:var(--txt-2);margin-top:2px}
+  .site .go{position:absolute;right:13px;top:12px;font-size:13px;color:var(--txt-3);transition:all .16s}
   .site:hover .go{color:#fff;transform:translateX(2px)}
-  .site .kind{font-size:11px;color:#a1a1aa;margin-top:2px}
-  .btn.dim{opacity:.55}
-  .btn.dim:hover{background:transparent;box-shadow:none}
+
+  /* 设置区 */
+  .setgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:720px){.setgrid{grid-template-columns:1fr}}
+  .field{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
+  .field label{font-size:12px;color:var(--txt-3)}
+  select,input[type=text]{width:100%;font-family:inherit;font-size:13px;color:var(--txt);background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.14);border-radius:9px;padding:8px 10px;outline:none;transition:border-color .15s}
+  select:focus,input[type=text]:focus{border-color:rgba(255,255,255,.44);background:rgba(255,255,255,.075)}
+  .msg{font-size:12px;color:var(--ok);min-height:18px}
+  .msg.err{color:var(--err)}
+  .divider{height:1px;background:linear-gradient(90deg,rgba(255,255,255,.15),transparent);margin:30px 0 16px}
+  footer{color:#5d5d66;font-size:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="badge"><i></i>LOCAL SETUP · 本机检测</div>
-  <h1>一键安装向导</h1>
-  <p class="lead">自动检测本机的油猴与开关状态，通过后点按钮即可装脚本，无需复制代码。<a class="inline" href="#step4">已经装好？直接去刷课 ↓</a></p>
+
+  <!-- 顶栏:版本 + 更新状态 -->
+  <div class="top">
+    <div class="logo">
+      <span class="mark">刷</span>
+      <span class="name">刷课助手<small>安装向导</small></span>
+    </div>
+    <span class="grow"></span>
+    <span class="vchip" id="vchip"><i></i><span id="vchipTx">检测中…</span></span>
+  </div>
+
+  <!-- 更新条 -->
+  <div class="ubar" id="ubar" hidden>
+    <div class="row1">
+      <span class="ic" id="ubIc">↑</span>
+      <div class="tx"><b id="ubTitle"></b><span id="ubDesc"></span></div>
+      <div class="acts">
+        <button class="btn primary small" id="ubDl" hidden>下载新版本</button>
+        <button class="btn small" id="ubRetry" hidden>重试检测</button>
+        <a class="btn small" id="ubPage" target="_blank" rel="noreferrer" hidden>打开下载页</a>
+        <button class="btn small dim" id="ubSkip" hidden>跳过此版本</button>
+      </div>
+    </div>
+    <div class="bar" id="ubBar" hidden><i id="ubBarIn"></i></div>
+  </div>
+
+  <div class="hero">
+    <div class="badge"><i></i>LOCAL SETUP · 本机检测</div>
+    <h1>一键装好,直接开刷</h1>
+    <p class="lead">自动检测本机油猴与开关状态,通过后点按钮装脚本,不用复制代码。<a href="#step4">已经装好了?直接去刷课 →</a></p>
+  </div>
 
   <section id="step1">
-    <h2><span class="num">1</span>装脚本管理器（Tampermonkey）</h2>
+    <h2><span class="num">1</span>装脚本管理器(Tampermonkey)</h2>
     <div class="rows" id="envRows"><div class="row"><div class="b"><b><span class="spin"></span>正在检测本机浏览器…</b></div></div></div>
     <div class="actions" id="envActions"></div>
   </section>
@@ -99,13 +187,13 @@
     <h2><span class="num">2</span>开启「允许用户脚本」</h2>
     <div class="rows" id="permRows"><div class="row"><div class="b"><b><span class="spin"></span>正在读取扩展设置…</b></div></div></div>
     <div class="warnbox" id="permWarn">
-      <b>开关关着 → 脚本显示「已启用」但一条都不执行。</b>判断方法：油猴弹窗顶部出现黑条提示、脚本名变灰，就是这个开关没开。
+      <b>开关关着 → 脚本显示「已启用」但一条都不执行。</b>判断方法:油猴弹窗顶部出现黑条提示、脚本名变灰,就是这个开关没开。
     </div>
     <ol class="steps">
-      <li>地址栏输入 <code>edge://extensions</code>（Chrome 用 <code>chrome://extensions</code>）</li>
+      <li>地址栏输入 <code>edge://extensions</code>(Chrome 用 <code>chrome://extensions</code>)</li>
       <li>找到 <b>Tampermonkey</b> → 「<b>详细信息</b>」</li>
       <li>打开「<b>允许用户脚本</b>」开关</li>
-      <li>回到本页，3 秒内状态自动变「已开启」</li>
+      <li>回到本页,3 秒内状态自动变「已开启」</li>
     </ol>
     <div class="copybar">
       <span class="lbl">地址栏直达</span>
@@ -118,43 +206,71 @@
     <h2><span class="num">3</span>装入脚本</h2>
     <div class="actions">
       <a class="btn primary" href="/install/courseauto.user.js">安装「刷课助手」<span id="verMain"></span></a>
-      <a class="btn" href="/install/courseauto-webai-bridge.user.js">安装「网页 AI 桥」（可选）</a>
+      <a class="btn" href="/install/courseauto-webai-bridge.user.js">安装「网页 AI 桥」(可选)</a>
     </div>
-    <p class="note">点「安装」后油猴会弹出确认页，再点一次「安装」即可；没反应 = 第 1 步没装好。</p>
-    <p class="note" id="verNote">油猴确认页顶部显示的版本号应与本页一致，不一致说明装的是旧条目。</p>
+    <p class="note">点「安装」后油猴会弹确认页,再点一次「安装」即可;没反应 = 第 1 步没装好。</p>
+    <p class="note" id="verNote">油猴确认页顶部显示的版本号应与本页一致,不一致说明装的是旧条目。</p>
   </section>
 
   <section id="step4">
     <h2><span class="num">4</span>开始刷课</h2>
     <div class="sites">
       <a class="site" href="https://i.chaoxing.com" target="_blank" rel="noreferrer">
-        <span class="go">→</span>
-        <span class="nm">学习通</span>
-        <span class="host">i.chaoxing.com</span>
-        <span class="kind">超星 · 视频/测验/作业</span>
+        <span class="go">→</span><span class="nm">学习通</span>
+        <span class="host">i.chaoxing.com</span><span class="kind">超星 · 视频/测验/作业</span>
       </a>
       <a class="site" href="https://www.zhihuishu.com" target="_blank" rel="noreferrer">
-        <span class="go">→</span>
-        <span class="nm">智慧树</span>
-        <span class="host">zhihuishu.com</span>
-        <span class="kind">知到 · 视频连播</span>
+        <span class="go">→</span><span class="nm">智慧树</span>
+        <span class="host">zhihuishu.com</span><span class="kind">知到 · 视频连播</span>
       </a>
       <a class="site" href="https://www.yuketang.cn" target="_blank" rel="noreferrer">
-        <span class="go">→</span>
-        <span class="nm">雨课堂</span>
-        <span class="host">yuketang.cn</span>
-        <span class="kind">学堂在线 · 视频/弹题</span>
+        <span class="go">→</span><span class="nm">雨课堂</span>
+        <span class="host">yuketang.cn</span><span class="kind">学堂在线 · 视频/弹题</span>
       </a>
     </div>
-    <p class="note"><b>进课程页后看右下角</b>：出现「刷课助手」面板 = 装好了。首次使用点面板 ⚙ 填 AI Key（或选「网页 AI」），再点「开始」。</p>
-    <p class="note">面板没出现时按顺序查：① 第 2 步是否「已开启」→ ② 油猴图标有无数字角标 → ③ 是否课程/章节页 → ④ F12 控制台过滤「刷课助手」。</p>
-    <p class="note">用「网页 AI」答题的话，别关掉本程序的黑色窗口——题目靠它转发。</p>
+    <p class="note"><b>进课程页后看右下角</b>:出现「刷课助手」面板 = 装好了。首次使用点面板 ⚙,选「网页 AI」并填下面的中转地址,再点「开始」。</p>
+    <p class="note">面板没出现时按顺序查:① 第 2 步是否「已开启」→ ② 油猴图标有无数字角标 → ③ 是否课程/章节页 → ④ F12 控制台过滤「刷课助手」。</p>
+    <p class="note">用「网页 AI」答题时,别关掉本程序的黑色窗口 —— 题目靠它转发。</p>
   </section>
 
   <div class="divider"></div>
+
+  <div class="setgrid">
+    <section>
+      <h2>打开方式</h2>
+      <div class="field">
+        <label>以后启动程序时,用哪个浏览器打开本页</label>
+        <select id="brSel"></select>
+      </div>
+      <div class="field" id="brPathField" hidden>
+        <label>自定义浏览器路径(填 .exe 全路径)</label>
+        <input type="text" id="brPath" placeholder="例如 D:\Chrome\chrome.exe" spellcheck="false">
+      </div>
+      <div class="actions">
+        <button class="btn primary small" id="brSave">保存</button>
+        <span class="msg" id="brMsg"></span>
+      </div>
+      <p class="note">想彻底不弹浏览器就选「不自动打开」,启动后把窗口里的地址复制到任意浏览器即可。改完下次启动生效。</p>
+    </section>
+
+    <section>
+      <h2>本机中转地址</h2>
+      <div class="copybar">
+        <span class="lbl">面板 ⚙ 里填</span>
+        <span class="val" id="relayUrl">http://127.0.0.1:8790</span>
+        <button class="btn small" id="copyRelay">复制</button>
+      </div>
+      <p class="note">网页 AI 模式靠本程序转发请求,地址要和窗口里显示的一致。端口被占用时程序会用 8791,以窗口提示为准。</p>
+      <p class="note" id="verAll"></p>
+    </section>
+  </div>
+
   <footer>
-    检测只读本机浏览器配置目录，不会上传。
-    <div class="actions" style="margin-top:12px"><button class="btn small" id="recheck">重新检测</button></div>
+    <span>只读本机浏览器配置目录,数据不外传。</span>
+    <span class="actions">
+      <button class="btn small" id="recheck">重新检测</button>
+      <button class="btn small" id="updCheck">检查更新</button>
+    </span>
   </footer>
 </div>
 
@@ -167,7 +283,11 @@
   var extUrlEl = document.getElementById('extUrl');
   var steps = ['step1', 'step2', 'step3', 'step4'].map(function (id) { return document.getElementById(id); });
   var installBtns = Array.prototype.slice.call(document.querySelectorAll('#step3 .btn'));
-  var pollDelay = 3000;   // 全部就绪后放慢轮询,别一直 3 秒打一次接口
+  var pollDelay = 3000;
+  var STATE = { prefs: null, update: null, dl: null, port: location.port || '8790' };
+
+  // 中转地址按当前端口显示(端口被占时程序会换端口)
+  document.getElementById('relayUrl').textContent = 'http://127.0.0.1:' + STATE.port;
 
   function el(tag, cls, html) {
     var d = document.createElement(tag);
@@ -175,12 +295,261 @@
     if (html != null) d.innerHTML = html;
     return d;
   }
+  function api(path, opt) {
+    return fetch(path, opt || { cache: 'no-store' }).then(function (r) { return r.json(); });
+  }
+  function fmtSize(n) {
+    n = Number(n) || 0;
+    if (!n) return '';
+    if (n > 1024 * 1024) return (n / 1024 / 1024).toFixed(0) + ' MB';
+    return Math.max(1, Math.round(n / 1024)) + ' KB';
+  }
 
-  // 三态文案:true 已开启 / false 未开启 / null 读不到
+  /* ================= 更新提示 ================= */
+  var vchip = document.getElementById('vchip');
+  var vchipTx = document.getElementById('vchipTx');
+  var ubar = document.getElementById('ubar');
+  var ubTitle = document.getElementById('ubTitle');
+  var ubDesc = document.getElementById('ubDesc');
+  var ubDl = document.getElementById('ubDl');
+  var ubRetry = document.getElementById('ubRetry');
+  var ubPage = document.getElementById('ubPage');
+  var ubSkip = document.getElementById('ubSkip');
+  var ubBar = document.getElementById('ubBar');
+  var ubBarIn = document.getElementById('ubBarIn');
+  var ubIc = document.getElementById('ubIc');
+
+  function showBar(html) {
+    ubBar.hidden = false;
+    ubBar.style.display = 'block';
+    if (html != null) ubBarIn.style.width = html;
+  }
+  function hideBar() { ubBar.hidden = true; ubBar.style.display = 'none'; ubBarIn.style.width = '0'; }
+
+  function renderUpdate(u) {
+    STATE.update = u;
+    var cur = u.current || '';
+    ubar.hidden = true;
+    ubar.classList.remove('muted');
+    [ubDl, ubRetry, ubPage, ubSkip].forEach(function (b) { b.hidden = true; });
+    hideBar();
+    vchip.className = 'vchip';
+
+    if (u.state === 'checking') {
+      vchip.classList.add('ok');
+      vchipTx.textContent = 'v' + cur + ' · 正在检测更新';
+      return;
+    }
+    if (u.state === 'has-update') {
+      var skipped = u.skippedVersion && u.skippedVersion === u.latest;
+      vchip.classList.add('new');
+      vchipTx.textContent = 'v' + cur + ' → v' + u.latest;
+      if (skipped) return;   // 已选择跳过这一版:顶栏仍提示,但不再弹条
+      ubar.hidden = false;
+      ubIc.textContent = '↑';
+      ubTitle.textContent = '发现新版本 v' + u.latest;
+      var sz = u.asset && u.asset.size ? '(' + fmtSize(u.asset.size) + ')' : '';
+      ubDesc.textContent = '当前 v' + cur + ',新版本 ' + (u.asset ? u.asset.name + ' ' + sz : '可在 Release 页下载') + '。下载后关掉本窗口,运行新程序即可。';
+      ubDl.hidden = false;
+      ubSkip.hidden = false;
+      ubPage.hidden = false;
+      ubPage.href = u.pageUrl || ('https://github.com/None-wu/courseauto/releases/latest');
+      if (u.insecure) ubDesc.textContent += ' (本机网络证书异常,已自动降级检测)';
+      return;
+    }
+    if (u.state === 'up-to-date') {
+      vchip.classList.add('ok');
+      vchipTx.textContent = 'v' + cur + ' · 已是最新';
+      return;
+    }
+    // unreachable:连不上 GitHub
+    vchip.classList.add('bad');
+    vchipTx.textContent = 'v' + cur + ' · 无法检测更新';
+    ubar.hidden = false;
+    ubar.classList.add('muted');
+    ubIc.textContent = '!';
+    ubTitle.textContent = '无法检测更新';
+    ubDesc.textContent = '连不上 GitHub(网络被限制或证书异常),不影响正常使用。想手动看版本可打开下载页。';
+    ubRetry.hidden = false;
+    ubPage.hidden = false;
+    ubPage.href = u.pageUrl || ('https://github.com/None-wu/courseauto/releases/latest');
+  }
+
+  function loadUpdate(refresh) {
+    api('/api/update/check' + (refresh ? '?refresh=1' : ''))
+      .then(function (u) {
+        renderUpdate(u);
+        // 程序刚启动、检测还没回来:1.5 秒后再问一次
+        if (u.state === 'checking') setTimeout(function () { loadUpdate(false); }, 1500);
+      })
+      .catch(function () { renderUpdate({ state: 'unreachable', current: '' }); });
+  }
+
+  ubRetry.addEventListener('click', function () {
+    ubTitle.textContent = '正在重新检测…';
+    ubDesc.textContent = '可能需要几秒钟。';
+    ubRetry.hidden = true;
+    vchip.className = 'vchip ok';
+    vchipTx.textContent = '检测中…';
+    loadUpdate(true);
+  });
+
+  ubSkip.addEventListener('click', function () {
+    var v = STATE.update && STATE.update.latest;
+    if (!v) return;
+    api('/api/update/skip', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ version: v })
+    }).then(function () {
+      utoast('已跳过 v' + v + ',下次有新版本再提示');
+      ubar.hidden = true;
+    });
+  });
+
+  ubDl.addEventListener('click', function () {
+    var u = STATE.update;
+    if (!u || !u.asset) return;
+    ubDl.hidden = true;
+    ubTitle.textContent = '正在下载 v' + u.latest;
+    ubDesc.textContent = '下载中,别关窗口。文件会存到本机数据目录,完成后可一键打开所在文件夹。';
+    showBar('2%');
+    api('/api/update/download', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: u.asset.url, name: u.asset.name, size: u.asset.size })
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.error || '下载任务没建起来');
+      pollDownload(r.id);
+    }).catch(function (e) {
+      failDl(String(e && e.message || e));
+    });
+  });
+
+  function pollDownload(id) {
+    var tick = 0;
+    (function loop() {
+      api('/api/update/progress?id=' + encodeURIComponent(id)).then(function (p) {
+        if (!p.ok) return failDl(p.error || '取不到下载进度');
+        if (p.state === 'running') {
+          var pct = p.total ? Math.min(99, Math.round(p.received / p.total * 100)) : 30;
+          showBar(pct + '%');
+          if (p.total) ubDesc.textContent = '已下载 ' + fmtSize(p.received) + ' / ' + fmtSize(p.total);
+          else ubDesc.textContent = '已下载 ' + fmtSize(p.received);
+          setTimeout(loop, 600);
+          return;
+        }
+        if (p.state === 'done') {
+          showBar('100%');
+          ubIc.textContent = '✓';
+          ubTitle.textContent = 'v' + (STATE.update && STATE.update.latest) + ' 已下载完成';
+          ubDesc.textContent = p.file + '　—— 关掉本窗口后运行它(可直接覆盖旧程序)';
+          ubDl.hidden = true;
+          ubSkip.hidden = true;
+          var openBtn = document.getElementById('ubOpen');
+          if (!openBtn) {
+            openBtn = el('button', 'btn primary small', '打开所在文件夹');
+            openBtn.id = 'ubOpen';
+            openBtn.addEventListener('click', function () {
+              api('/api/update/reveal', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file: p.file })
+              });
+            });
+            ubDl.parentNode.appendChild(openBtn);
+          }
+          openBtn.hidden = false;
+          return;
+        }
+        failDl(p.error || '下载失败');
+      }).catch(function (e) { failDl(String(e && e.message || e)); });
+      tick++;
+      if (tick > 600) failDl('下载超时');
+    })();
+  }
+
+  function failDl(msg) {
+    ubIc.textContent = '!';
+    ubar.classList.add('muted');
+    ubTitle.textContent = '下载没成功';
+    ubDesc.textContent = msg + '　可以直接用浏览器打开下载页手动下。';
+    hideBar();
+    ubPage.hidden = false;
+    ubPage.href = (STATE.update && STATE.update.pageUrl) || 'https://github.com/None-wu/courseauto/releases/latest';
+    ubRetry.hidden = false;
+  }
+
+  function utoast(msg) {
+    var m = document.getElementById('brMsg');
+    if (!m) return;
+    m.className = 'msg';
+    m.textContent = msg;
+    setTimeout(function () { if (m.textContent === msg) m.textContent = ''; }, 3000);
+  }
+
+  document.getElementById('updCheck').addEventListener('click', function () { loadUpdate(true); });
+
+  /* ================= 打开方式设置 ================= */
+  var brSel = document.getElementById('brSel');
+  var brPath = document.getElementById('brPath');
+  var brPathField = document.getElementById('brPathField');
+  var brMsg = document.getElementById('brMsg');
+
+  function renderPrefs(p) {
+    STATE.prefs = p;
+    var detected = {};
+    (p.detected || []).forEach(function (b) { detected[b.key] = b; });
+    brSel.innerHTML = '';
+    (p.choices || []).forEach(function (c) {
+      var d = detected[c.key] || {};
+      var label = c.label;
+      if (c.key !== 'auto' && c.key !== 'none') label += d.found ? '(已安装)' : '(未安装)';
+      var o = document.createElement('option');
+      o.value = c.key;
+      o.textContent = label;
+      brSel.appendChild(o);
+    });
+    var custom = document.createElement('option');
+    custom.value = 'custom';
+    custom.textContent = '自定义浏览器路径…';
+    brSel.appendChild(custom);
+
+    brSel.value = p.browser || 'auto';
+    brPath.value = p.browserPath || '';
+    togglePathField();
+  }
+
+  function togglePathField() {
+    brPathField.hidden = brSel.value !== 'custom';
+  }
+  brSel.addEventListener('change', togglePathField);
+
+  brSave.addEventListener('click', function () {
+    var body = { browser: brSel.value };
+    if (brSel.value === 'custom') body.browserPath = brPath.value.trim();
+    brMsg.className = 'msg';
+    brMsg.textContent = '保存中…';
+    api('/api/prefs', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    }).then(function (r) {
+      if (!r.ok) throw new Error(r.error || '保存失败');
+      brMsg.textContent = '已保存,下次启动生效';
+      STATE.prefs.browser = r.browser;
+      STATE.prefs.browserPath = r.browserPath || '';
+    }).catch(function (e) {
+      brMsg.className = 'msg err';
+      brMsg.textContent = String(e && e.message || e);
+    });
+  });
+
+  function loadPrefs() {
+    api('/api/prefs').then(renderPrefs).catch(function () {
+      brMsg.className = 'msg err';
+      brMsg.textContent = '读取本机设置失败(程序窗口还在吗?)';
+    });
+  }
+
+  /* ================= 环境检测(原逻辑) ================= */
   function permText(v) {
     if (v === true) return { tag: 'ok', text: '✓ 已开启' };
     if (v === false) return { tag: 'no', text: '✗ 未开启' };
-    return { tag: 'no', text: '? 状态未知（旧版浏览器一般默认允许）' };
+    return { tag: 'no', text: '? 状态未知(旧版浏览器一般默认允许)' };
   }
 
   function render(env) {
@@ -188,29 +557,33 @@
     actEl.innerHTML = '';
     permEl.innerHTML = '';
 
-    // ---- 第 3 步:把服务端实际提供的脚本版本标出来 ----
     var sv = env.scripts || {};
     var verMain = document.getElementById('verMain');
     var verNote = document.getElementById('verNote');
+    var verAll = document.getElementById('verAll');
     if (verMain && sv.main && sv.main !== 'unknown') verMain.textContent = ' v' + sv.main;
     if (verNote && sv.main && sv.main !== 'unknown') {
-      verNote.innerHTML = '本次提供：刷课助手 <b>v' + sv.main + '</b>' +
-        (sv.bridge && sv.bridge !== 'unknown' ? '，网页 AI 桥 <b>v' + sv.bridge + '</b>' : '') +
-        '。油猴确认页的版本号应与之相同，不同 = 装到了旧条目。';
+      verNote.innerHTML = '本次提供:刷课助手 <b>v' + sv.main + '</b>' +
+        (sv.bridge && sv.bridge !== 'unknown' ? ',网页 AI 桥 <b>v' + sv.bridge + '</b>' : '') +
+        '。油猴确认页的版本号应与之相同,不同 = 装到了旧条目。';
+    }
+    if (verAll && sv.main && sv.main !== 'unknown') {
+      verAll.innerHTML = '本程序内置:刷课助手 <b>v' + sv.main + '</b>' +
+        (sv.bridge && sv.bridge !== 'unknown' ? ' / 网页 AI 桥 <b>v' + sv.bridge + '</b>' : '') + '。';
     }
 
     if (!env.browsers.length) {
       rowsEl.appendChild(el('div', 'row', '<div class="b"><b>未发现 Chrome / Edge / Brave 配置目录</b></div>'));
     }
 
-    var blocked = false;   // 明确读到 false
-    var allowed = false;   // 明确读到 true
+    var blocked = false;
+    var allowed = false;
 
     env.browsers.forEach(function (b) {
       var row = el('div', 'row');
       var info = el('div', 'b');
       var mgrText = b.managers.length
-        ? b.managers.map(function (m) { return m.name + ' v' + m.version + '（' + m.profile + '）'; }).join('、')
+        ? b.managers.map(function (m) { return m.name + ' v' + m.version + '(' + m.profile + ')'; }).join('、')
         : '未检测到脚本管理器';
       info.appendChild(el('b', null, b.name));
       info.appendChild(el('span', null, b.profiles.length + ' 个配置 · ' + mgrText));
@@ -224,7 +597,6 @@
       a.rel = 'noreferrer';
       actEl.appendChild(a);
 
-      // ---- 第 2 步:每个管理器一行开关状态 ----
       if (!b.managers.length) return;
       b.managers.forEach(function (m) {
         var pr = el('div', 'row');
@@ -254,45 +626,46 @@
     steps[2].classList.toggle('done', allowed);
     steps[3].classList.toggle('done', allowed);
 
-    // 没装管理器时安装按钮变淡(仍可点:个别浏览器读不到扩展目录,不做硬拦)
     installBtns.forEach(function (b) {
       b.classList.toggle('dim', !env.anyManager);
       if (env.anyManager) b.removeAttribute('title');
       else b.setAttribute('title', '先完成第 1 步:装好 Tampermonkey 再点这里');
     });
 
-    // 全部就绪后放慢重检频率(3 秒 → 10 秒),省点 CPU
     pollDelay = (env.anyManager && allowed) ? 10000 : 3000;
   }
 
   function load(showSpin) {
     if (showSpin) rowsEl.innerHTML = '<div class="row"><div class="b"><b><span class="spin"></span>正在检测本机浏览器…</b></div></div>';
-    fetch('/api/env', { cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(render)
-      .catch(function (e) {
-        rowsEl.innerHTML = '<div class="row"><div class="b"><b>检测接口不可用</b><span>' + (e && e.message || e) + '</span></div></div>';
-      });
+    api('/api/env').then(render).catch(function (e) {
+      rowsEl.innerHTML = '<div class="row"><div class="b"><b>检测接口不可用</b><span>' + (e && e.message || e) + '</span></div></div>';
+    });
   }
 
-  document.getElementById('recheck').addEventListener('click', function () { load(true); });
+  document.getElementById('recheck').addEventListener('click', function () { load(true); loadPrefs(); });
 
-  document.getElementById('copyExt').addEventListener('click', function () {
-    var btn = this;
-    var txt = extUrlEl.textContent.trim();
-    var done = function () { btn.textContent = '已复制'; setTimeout(function () { btn.textContent = '复制'; }, 1400); };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(txt).then(done, function () { fallback(); });
-    } else { fallback(); }
-    function fallback() {
-      var ta = document.createElement('textarea');
-      ta.value = txt; document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = '请手动复制'; }
-      document.body.removeChild(ta);
-    }
-  });
+  function bindCopy(btnId, targetId, keep) {
+    document.getElementById(btnId).addEventListener('click', function () {
+      var btn = this;
+      var txt = document.getElementById(targetId).textContent.trim();
+      var done = function () { btn.textContent = '已复制'; setTimeout(function () { btn.textContent = keep; }, 1400); };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done, fallback);
+      } else fallback();
+      function fallback() {
+        var ta = document.createElement('textarea');
+        ta.value = txt; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { btn.textContent = '请手动复制'; }
+        document.body.removeChild(ta);
+      }
+    });
+  }
+  bindCopy('copyExt', 'extUrl', '复制');
+  bindCopy('copyRelay', 'relayUrl', '复制');
 
   load(true);
+  loadPrefs();
+  loadUpdate(false);
   (function tick() {
     setTimeout(function () { load(false); tick(); }, pollDelay);
   })();

@@ -60,6 +60,12 @@
     const extra = [];
     if (!qBare) extra.push('题干内容全部在图里,图片就是题面本身,请直接从图中读取题目后再作答');
     if ((q.options || []).length && !oBare) extra.push('选项内容也都在图里,请先从图中读出各选项文字,再回答对应的选项字母');
+    // 图文混排(文字 + 图都有):文字常常只是题面的一部分,表格/公式/图形细节只在图里。
+    // 不点明这点时,AI 容易只按残缺文字硬答。
+    if (qBare && qBare.length >= 2) {
+      extra.push('本题既有文字也有图:文字与图片合起来才是完整题面,文字里缺的表格/公式/图形细节请以图片为准,不要只看文字作答');
+      if (n > 1) extra.push(`共 ${n} 张图请按顺序逐张看完(可能是同一题的几个部分)`);
+    }
     extra.push(`占位 [图片1]~[图片${n}] 与附件顺序一一对应`);
     return `\n(本题共 ${n} 张配图,已作为附件随本条消息发送,请先看图再作答;${extra.join(';')})`;
   }
@@ -186,8 +192,10 @@
   }
 
   // images:题目图片(dataURL 数组),由桥脚本负责把它们当附件塞进 AI 输入框
-  async function askWebAI(text, timeoutMs, expect, images) {
-    const imgs = Array.isArray(images) ? images.filter(Boolean).slice(0, IMG_MAX_COUNT) : [];
+  // maxImages:本次最多送几张 —— 单题用默认 IMG_MAX_COUNT,多道图题合并提问时由调用方放宽
+  async function askWebAI(text, timeoutMs, expect, images, maxImages) {
+    const cap = Math.max(1, Number(maxImages) || IMG_MAX_COUNT);
+    const imgs = Array.isArray(images) ? images.filter(Boolean).slice(0, cap) : [];
     // 先验桥:目标 AI 站的桥不在线时跳过 postMessage 直连(握手状态可能是旧窗口残留,会白等 60s),
     // 直接走中转通道的快速失败 + 指引
     let site = '';
@@ -379,21 +387,11 @@
     return out;
   }
 
-  // 把一批题打包问一次 AI,返回与 tasks 等长的答案数组(没解析到的位置为 null)
-  async function askBatchOnce(tasks, tag) {
-    const text = buildBatchPrompt(tasks);
-    // 等待上限:每题 25s、最少 5 分钟、最多 15 分钟。整卷 AI 要连续输出几十行,
-    // 之前按 15s/题(30 题=7.5 分钟)且桥内部只等 90s,所以经常"没答完就收货"
-    const timeoutMs = Math.min(900, Math.max(300, tasks.length * 25)) * 1000;
-    log(`📦 整卷模式${tag}:把 ${tasks.length} 道题一次性发给网页 AI(最长等 ${Math.round(timeoutMs / 1000)}s,期间别关 AI 页面)...`, 'info');
-    const r = await askWebAI(text, timeoutMs, tasks.length);
-    if (r.error) { log('网页 AI: ' + r.error, 'warn'); return null; }
-    const raw = String(r.text || '').trim();
-    if (!raw) { log('网页 AI 整卷回复为空', 'warn'); return null; }
-    log('网页 AI 整卷原始回复: ' + raw.replace(/\s+/g, ' ').slice(0, 100), 'info');
-    // 按「题号.答案」解析。兼容两种形态:
-    // ① 多行:1.A\n2.C\n...(正常);② 压平一行:1.A 2.C 3.B...(回复被压平或 AI 单行输出)。
-    // 每个答案取到"下一个题号标记或结尾"为止,而不是行尾 —— 一行多题也能全部拆出
+  // 把 AI 的整卷回复按「题号.答案」拆成与 tasks 等长的答案数组(没解析到的位置为 null)
+  // 兼容两种形态:
+  // ① 多行:1.A\n2.C\n...(正常);② 压平一行:1.A 2.C 3.B...(回复被压平或 AI 单行输出)。
+  // 每个答案取到"下一个题号标记或结尾"为止,而不是行尾 —— 一行多题也能全部拆出
+  function parseBatchAnswers(raw, tasks) {
     const rawMap = new Array(tasks.length).fill(null);
     const re = /(\d{1,3})\s*[\.、:：)\]]\s*([\s\S]*?)(?=(?:^|\s)\d{1,3}\s*[\.、:：)\]]|$)/g;
     // 元宝等站会把「展开/复制/收起」等 UI 按钮文字混进回复,逐行剥掉再入库
@@ -412,18 +410,130 @@
     });
   }
 
+  // 把一批题打包问一次 AI,返回与 tasks 等长的答案数组(没解析到的位置为 null)
+  async function askBatchOnce(tasks, tag) {
+    const text = buildBatchPrompt(tasks);
+    // 等待上限:每题 25s、最少 5 分钟、最多 15 分钟。整卷 AI 要连续输出几十行,
+    // 之前按 15s/题(30 题=7.5 分钟)且桥内部只等 90s,所以经常"没答完就收货"
+    const timeoutMs = Math.min(900, Math.max(300, tasks.length * 25)) * 1000;
+    log(`📦 整卷模式${tag}:把 ${tasks.length} 道题一次性发给网页 AI(最长等 ${Math.round(timeoutMs / 1000)}s,期间别关 AI 页面)...`, 'info');
+    const r = await askWebAI(text, timeoutMs, tasks.length);
+    if (r.error) { log('网页 AI: ' + r.error, 'warn'); return null; }
+    const raw = String(r.text || '').trim();
+    if (!raw) { log('网页 AI 整卷回复为空', 'warn'); return null; }
+    log('网页 AI 整卷原始回复: ' + raw.replace(/\s+/g, ' ').slice(0, 100), 'info');
+    return parseBatchAnswers(raw, tasks);
+  }
+
+  /* ==================== 图文混排题合并提问 ==================== */
+  // 背景:图片题原先在整卷模式里被逐题剔出去单独问,每题都要「上传图 → 等上传确认 → 发送 → 等回答」,
+  // 一页十几道图题时往返次数太多,慢到课程超时。
+  // 做法:把连续的几道图片题合成一次提问,配图按题序连续编号(第1题的图是[图片1]..),
+  // 让 AI 一次读完全部图、按题号一次答完;只有合批没解析到的题才回退到单题通道。
+  const IMG_BATCH_QUESTIONS = 3;   // 一次合批最多几道图片题
+  const IMG_BATCH_IMAGES = 6;      // 一次合批最多几张图(再多 AI 容易看漏)
+
+  function splitImageBatches(tasks) {
+    const groups = [];
+    let cur = [];
+    let imgs = 0;
+    tasks.forEach((t) => {
+      const n = Math.max(1, ((t.q && t.q.images) || []).length);
+      if (cur.length && (cur.length >= IMG_BATCH_QUESTIONS || imgs + n > IMG_BATCH_IMAGES)) {
+        groups.push(cur); cur = []; imgs = 0;
+      }
+      cur.push(t); imgs += n;
+    });
+    if (cur.length) groups.push(cur);
+    return groups;
+  }
+
+  function buildImageBatchPrompt(tasks) {
+    const typeName = { '0': '单选题', '1': '多选题', '2': '填空题', '3': '判断题' };
+    let total = 0;
+    const plan = [];
+    tasks.forEach((t, i) => {
+      const n = ((t.q && t.q.images) || []).length;
+      if (!n) return;
+      const from = total + 1;
+      total += n;
+      const span = n === 1 ? `[图片${from}]` : `[图片${from}]~[图片${total}]`;
+      plan.push(`第${i + 1}题的图=${span}`);
+    });
+    let out = `下面有 ${tasks.length} 道题,配图已作为附件按顺序发送,共 ${total} 张:${plan.join(';')}。\n`;
+    out += '要求:先按编号顺序把每张图都看完(图里可能是表格、公式、代码或图形),再把「题目文字 + 图」合起来理解;\n';
+    out += '题干里的 [图片N] 只是占位符,不是题目内容。\n';
+    out += `然后按题号逐行给出答案,每行格式严格为「题号.答案」(如 1.A、2.正确、3.填空内容),不要解释、不要复述题目。单选题写一个字母;多选题写字母组合(如 ABD);判断题写「正确」或「错误」;填空题写答案,多个空用|分隔。\n\n`;
+    tasks.forEach(({ q }, i) => {
+      out += `${i + 1}. (${typeName[String(q.type)] || '题目'}) ${q.question}\n`;
+      if (q.options && q.options.length) {
+        out += q.options.map((o, oi) => `${String.fromCharCode(65 + oi)}. ${o}`).join('\n') + '\n';
+      }
+      out += '\n';
+    });
+    return out;
+  }
+
+  async function askImageBatchOnce(tasks, tag) {
+    const imgs = [];
+    tasks.forEach((t) => {
+      (((t.q && t.q.images) || []).slice(0, IMG_MAX_COUNT)).forEach((u) => { if (u) imgs.push(u); });
+    });
+    if (!imgs.length) return null;
+    const text = buildImageBatchPrompt(tasks);
+    // 带图比纯文字慢得多:每题 90s、最少 4 分钟、最多 15 分钟
+    const timeoutMs = Math.min(900, Math.max(240, tasks.length * 90)) * 1000;
+    log(`🖼 图片题合并${tag}:${tasks.length} 道题 + ${imgs.length} 张图一次问(最长等 ${Math.round(timeoutMs / 1000)}s,AI 要先逐图看)...`, 'info');
+    // 第 5 参放宽单次送图上限,否则会被 IMG_MAX_COUNT 砍到 3 张,后面的题就没图了
+    const r = await askWebAI(text, timeoutMs, tasks.length, imgs, IMG_BATCH_IMAGES);
+    if (r.error) { log('网页 AI(图题合并): ' + r.error, 'warn'); return null; }
+    const raw = String(r.text || '').trim();
+    if (!raw) { log('网页 AI 图题合并回复为空', 'warn'); return null; }
+    log('网页 AI 图题合并原始回复: ' + raw.replace(/\s+/g, ' ').slice(0, 100), 'info');
+    return parseBatchAnswers(raw, tasks);
+  }
+
+  // 返回与 tasks(图片题子集)等长的答案数组
+  async function askImageBatches(tasks) {
+    const out = new Array(tasks.length).fill(null);
+    const groups = splitImageBatches(tasks);
+    let base = 0;
+    let seq = 0;
+    for (const g of groups) {
+      seq += 1;
+      const res = await askImageBatchOnce(g, groups.length > 1 ? `(${seq}/${groups.length})` : '');
+      if (res) res.forEach((v, k) => { if (v) out[base + k] = v; });
+      base += g.length;
+    }
+    return out;
+  }
+
   async function askBatchWebAI(tasks) {
     if (!tasks.length) return null;
     const out = new Array(tasks.length).fill(null);
-    // 图片题必须从整批里剔出去:整卷只是一段文字,AI 收到的题干里只有 [图片N] 占位,
-    // 图片本身不会跟过去 —— 单题通道才会把配图当附件上传。
+    // 图片题不能混进纯文字整批:整批只是一段文字,AI 收到的题干里只有 [图片N] 占位。
+    // 但也不必逐题问 —— 先把图片题几道一组合并提问(一次带多张图),只有合批漏掉的才逐题带图回退。
     const imgIdx = [];
-    tasks.forEach((t, i) => { if (t && t.q && questionHasImage(t.q)) imgIdx.push(i); });
+    for (let i = 0; i < tasks.length; i++) {
+      const t = tasks[i];
+      if (!t || !t.q || !questionHasImage(t.q)) continue;
+      // 合批时不经过 getAnswers,所以这里要自己把配图抓成 dataURL(有缓存,重复调用不重复下载);
+      // 抓图失败(权限/跨域)的题退回去走纯文字整批,不占着图题名额空等
+      try { await ensureQuestionImages(t.q); } catch (e) { /* ignore */ }
+      if ((t.q.images || []).length) imgIdx.push(i);
+    }
     if (imgIdx.length) {
-      log(`🖼 整卷里有 ${imgIdx.length} 道图片题,单独带图逐题问;其余 ${tasks.length - imgIdx.length} 道仍走整批`, 'info');
-      for (const i of imgIdx) {
-        const a = await getAnswers(tasks[i].q);
-        if (a && a.length) out[i] = a;
+      log(`🖼 整卷里有 ${imgIdx.length} 道图片题,先合并提问;其余 ${tasks.length - imgIdx.length} 道仍走整批`, 'info');
+      const imgTasks = imgIdx.map((i) => tasks[i]);
+      const gotImg = await askImageBatches(imgTasks);
+      gotImg.forEach((v, k) => { if (v) out[imgIdx[k]] = v; });
+      const missImg = imgIdx.filter((i) => !out[i]);
+      if (missImg.length) {
+        log(`🖼 合批没拿到答案的 ${missImg.length} 道图题,改为单题带图重问`, 'warn');
+        for (const i of missImg) {
+          const a = await getAnswers(tasks[i].q);
+          if (a && a.length) out[i] = a;
+        }
       }
     }
     const restIdx = tasks.map((t, i) => (imgIdx.indexOf(i) >= 0 ? -1 : i)).filter((i) => i >= 0);

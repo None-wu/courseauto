@@ -1,7 +1,11 @@
-// 安装页回归:验证第 3 步的版本提示文字并截图(dev/out/setup-ver.png)
+// 安装页回归:验证第 3 步的版本提示文字并截图(extras/tests/out/setup-ver.png)
+// 用法:先启动本机程序(node local/app.mjs --no-open 或双击 exe),再运行本脚本
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function findChrome() {
   const root = path.join(process.env.LOCALAPPDATA || '', 'ms-playwright');
@@ -20,7 +24,8 @@ const b = await chromium.launch({ headless: true, executablePath: findChrome() |
 const p = await b.newPage({ viewport: { width: 900, height: 800 } });
 await p.goto('http://127.0.0.1:8790/setup', { waitUntil: 'networkidle' });
 await p.waitForTimeout(1500);
-await p.screenshot({ path: 'out/setup-ver.png' });
+fs.mkdirSync(path.join(__dirname, 'out'), { recursive: true });
+await p.screenshot({ path: path.join(__dirname, 'out', 'setup-ver.png') });
 console.log('verNote:', await p.textContent('#verNote'));
 console.log('verMain:', await p.textContent('#verMain'));
 await b.close();

@@ -125,8 +125,8 @@ export function createCore({ getAsset, probeDir }) {
         const o = JSON.parse(raw);
         const cxId = String(o.cxId || ('cx' + Date.now().toString(36)));
         const ttl = Math.max(90 * 1000, Number(o.timeout) || 0);
-        // images:题目配图的 dataURL(最多 3 张),由 AI 页的桥负责转成文件上传
-        const images = Array.isArray(o.images) ? o.images.filter((s) => typeof s === 'string' && s.startsWith('data:image/')).slice(0, 3) : [];
+        // images:题目配图的 dataURL(单题最多 3 张,多道图题合并提问时最多 6 张),由 AI 页的桥负责转成文件上传
+        const images = Array.isArray(o.images) ? o.images.filter((s) => typeof s === 'string' && s.startsWith('data:image/')).slice(0, 6) : [];
         webaiQueue.push({ cxId, text: String(o.text || ''), href: String(o.href || ''), site: String(o.site || ''), expect: Number(o.expect) || 0, timeout: Number(o.timeout) || 0, ttl, images, at: Date.now() });
         while (webaiQueue.length > 20) webaiQueue.shift();
         return json(res, 200, { ok: true, cxId }), true;

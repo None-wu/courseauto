@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         刷课助手 · 网页AI桥
 // @namespace    cx-auto-study
-// @version      1.3.2
+// @version      1.3.4
 // @description  配合「刷课助手」使用:接收题目 → 自动填入网页版 AI 输入框 → 发送 → 抓取回答 → 回传。免 API Key。
 // @author       courseauto contributors
 // @license      MIT
@@ -659,14 +659,22 @@
       }
     }
     if (!via) return 0;
-    // 等上传:图片上传是异步的,发得太快会只发出文字。以"页面里图片数量变多"为准,最多等 20s
-    const before = document.querySelectorAll('img, [style*="background-image"]').length;
-    for (let i = 0; i < 50; i++) {
+    // 等上传:图片上传是异步的,发得太快只会发出文字。
+    // 多题合批时一次要塞 6 张,只看"变多"会在第一张传完就放行、后面的图被丢掉,
+    // 所以这里等"新增的预览数量 >= 本次上传张数",最多等 40s;一张预览都没出(站点用自定义容器)
+    // 也要给足兜底时间,别抢跑。
+    const countImgs = () => document.querySelectorAll('img, [style*="background-image"]').length;
+    const before = countImgs();
+    const want = Math.min(files.length, 6);
+    let added = 0;
+    // 等缩略图出齐再发消息:最多 10s(以前等 40s 会把整条链路拖到超时;预览不出来就直接继续)
+    for (let i = 0; i < 25; i++) {
       await sleep(400);
-      if (document.querySelectorAll('img, [style*="background-image"]').length > before) break;
+      added = countImgs() - before;
+      if (added >= want) break;
     }
-    await sleep(1200);
-    probeReport('题目配图已发送(' + via + ',' + files.length + ' 张)');
+    await sleep(added > 0 ? 600 : 1000);
+    probeReport('题目配图已发送(' + via + ',' + files.length + ' 张,预览 +' + Math.max(0, added) + ')');
     return files.length;
   }
 
