@@ -165,11 +165,6 @@
         '<span id="cxToggleBtn" class="cx-ic" title="展开/收起日志">▼</span>' +
         '<span id="cxCfgBtn" class="cx-ic" title="配置">⚙</span>' +
       '</div>' +
-      '<div id="cxStats">' +
-        '<div class="cell"><b id="cxStatJobs">—</b><span>任务点</span></div>' +
-        '<div class="cell"><b id="cxStatAns">0</b><span>已答题</span></div>' +
-        '<div class="cell cxClick" id="cxFailCell" title="点击查看未成功提交的任务点(章节/节点/原因)"><b id="cxStatFail">0</b><span>未提交 ›</span></div>' +
-      '</div>' +
       '<div id="cxLogs"></div>';
     const style = document.createElement('style');
     style.textContent =
@@ -191,15 +186,6 @@
       '.cx-ic{cursor:pointer;font-size:12px;color:#d4d4d8;min-width:23px;height:22px;display:inline-flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.16);border-radius:6px;padding:0 5px;line-height:1.4;transition:all .15s;user-select:none;flex:none}' +
       '.cx-ic:hover{background:#fafafa;color:#0a0a0a;border-color:#fafafa}' +
       '.cx-ic:active{transform:scale(0.96)}' +
-      '#cxStats{display:flex;gap:8px;padding:9px 12px 7px}' +
-      '#cxStats .cell{flex:1;display:flex;flex-direction:column;align-items:center;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;padding:5px 2px 4px}' +
-      '#cxStats .cell b{font-size:14px;font-weight:700;color:#fafafa;font-variant-numeric:tabular-nums;line-height:1.3;letter-spacing:0.3px}' +
-      '#cxStats .cell span{font-size:10px;color:#7d7d86;line-height:1.3}' +
-      '#cxStats .cell.cxClick{cursor:pointer;transition:all .15s}' +
-      '#cxStats .cell.cxClick:hover{background:rgba(255,255,255,0.1);border-color:rgba(255,255,255,0.3)}' +
-      '#cxStats .cell.has{border-color:rgba(255,255,255,0.45);background:rgba(255,255,255,0.09)}' +
-      '#cxStats .cell.has b{color:#fff}' +
-      '#cxStats .cell.has span{color:#d4d4d8}' +
       '#cxLogs{padding:2px 12px 10px;overflow-y:auto;max-height:236px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.25) transparent}' +
       '#cxLogs::-webkit-scrollbar{width:5px}' +
       '#cxLogs::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.22);border-radius:3px}' +
@@ -278,22 +264,9 @@
       logLines.push({ line: '🤖 自动做题:请点 ⚙ → 勾选「网页 AI 答题」并保持 AI 网页已登录', level: 'warn' });
     }
     renderLogs();
-    // 统计栏每秒刷新(任务点进度 / 已答题数 / 未提交任务点数)
-    setInterval(() => {
-      const j = document.getElementById('cxStatJobs');
-      const a = document.getElementById('cxStatAns');
-      const f = document.getElementById('cxStatFail');
-      const fc = document.getElementById('cxFailCell');
-      if (j) j.textContent = STATS.jobsTotal ? (STATS.jobsDone + '/' + STATS.jobsTotal) : '—';
-      if (a) a.textContent = String(STATS.answered);
-      if (f) f.textContent = String(submitFailCount());
-      if (fc) fc.classList.toggle('has', submitFailCount() > 0);
-    }, 1000);
-    // 点「未提交」格:把未成功提交的任务点列到日志区(单列一栏,便于直接定位章节/节点)
-    document.getElementById('cxFailCell').addEventListener('click', showSubmitFails);
-    // 启动时若已有未提交记录,提醒一次
+    // 未提交记录仍在日志里提示一次(统计栏已移除)
     if (submitFailCount() > 0) {
-      log(`📕 有 ${submitFailCount()} 个任务点未成功提交(点统计栏「未提交」查看章节与原因)`, 'warn');
+      log(`📕 有 ${submitFailCount()} 个任务点未成功提交(详见日志与本地记录)`, 'warn');
     }
   }
 
@@ -436,12 +409,9 @@
       '<div class="field"><div class="row"><div class="label">🚀 进入页面自动开始</div>' +
         '<input id="cfgAutoStart" type="checkbox" ' + (CONFIG.autoStart !== false ? 'checked' : '') + '></div>' +
         '<div class="hint">开(默认):一进课程/作业页就自动答题刷课。关:进页面先停在「已暂停」,看完页面确认是这一节再点 ▶ 开始;保存后下次进入页面生效</div></div>' +
-      '<div class="field"><div class="row"><div class="label">⏭ 做不掉就跳下一章</div>' +
-        '<input id="cfgSkipStuck" type="checkbox" ' + (CONFIG.skipStuckChapter !== false ? 'checked' : '') + '></div>' +
-        '<div class="hint">开(默认):某章任务点多轮复检仍未完成(平台风控/文档不上报时长等),把节点记进「未提交」清单后自动切下一章,不让整门课停在一章。关:做不完就停在本章(旧行为)</div></div>' +
       '<div class="field"><div class="row"><div class="label">🎬 视频倍速</div></div>' +
         '<input id="cfgSpeed" type="number" step="0.25" min="1" max="2" value="' + CONFIG.speed + '">' +
-        '<div class="hint">默认 2x(最快);1 = 原速最安全,2x 被检测风险最高,自行权衡</div></div>' +
+        '<div class="hint">默认 2x(最快);1 = 原速最安全。平台播放器自带倍速菜单会抢占,本脚本每 2 秒校正一次、被改回也会立即纠正,1x 一定按 1x 播</div></div>' +
       '<div class="field"><div class="row"><div class="label">⏰ 定时关闭</div></div>' +
         '<input id="cfgStopAt" type="text" placeholder="23:30" value="' + escHtml(CONFIG.stopAtTime || '') + '">' +
         '<div class="hint">填 HH:MM(如 23:30)= 每天到点自动停止挂机;留空 = 不关闭。比"每天刷够多少分钟"更可控:不影响白天效率,也不怕半夜跑飞</div></div>' +
@@ -456,28 +426,10 @@
       '<div class="field"><div class="row"><div class="label">📦 整卷模式(推荐)</div>' +
         '<input id="cfgWebAiBatch" type="checkbox" ' + (CONFIG.webAiBatch ? 'checked' : '') + '></div>' +
         '<div class="hint">开启后把整页题目一次性发给网页 AI、按题号批量回答再自动填写(1 次对话答完所有题,更快、不易触发限流);关闭则逐题询问。缺漏的题会自动回退逐题询问。含图片的题会单独带图逐题问(整批发文字时 AI 看不到图)</div></div>' +
-      '<div class="field"><div class="row"><div class="label">🖼 图片题看原图</div>' +
-        '<input id="cfgVision" type="checkbox" ' + (CONFIG.aiVision === false ? '' : 'checked') + '></div>' +
-        '<div class="hint">题干/选项是图片(公式、电路图、代码截图)时,把图片本体一起发给 AI,而不是只发一串图片地址。网页 AI 走附件上传(需桥 1.3.2+)。抓图失败会在题干里保留 [图片N] 占位</div></div>' +
-      '<div class="sec">🛡 安全与拟人</div>' +
-      '<div class="field"><div class="row"><div class="label">🎭 故意答错率(%)</div></div>' +
-        '<input id="cfgErrRate" type="number" step="1" min="0" max="20" value="' + Math.round(CONFIG.deliberateErrorRate * 100) + '">' +
-        '<div class="hint">拟人化:真人不会全对。填 8 = 8% 概率故意答错(判断题反着点、单选题点错项);填 0 关闭;多选不受影响</div></div>' +
-      '<div class="field"><div class="row"><div class="label">📤 自动提交测验</div>' +
-        '<input id="cfgSubmit" type="checkbox" ' + (CONFIG.autoSubmit ? 'checked' : '') + '></div>' +
-        '<div class="row" style="margin-top:8px"><div class="label" style="font-size:12px;font-weight:400">填充率需达到(固定 100%,不可改)</div></div>' +
-        '<input id="cfgAccuracy" type="text" value="100%" readonly disabled style="width:120px;opacity:0.6;cursor:not-allowed">' +
-        '<div class="hint">填充率 = 已填上答案的题数 / 总题数。固定 100%:只要有一题没填上答案就不交卷(空题必错,交白卷最亏);把漏填的任务点记进「未提交」栏,手动补完再交</div></div>' +
       '<div class="sec">🎯 提交后准确率检测</div>' +
-      '<div class="field"><div class="row"><div class="label">📊 检测准确率</div>' +
-        '<input id="cfgAccCheck" type="checkbox" ' + (CONFIG.accCheckEnabled ? 'checked' : '') + '></div>' +
-        '<div class="hint">只对「可重复提交」的任务点生效(有重做/再考一次入口的节点)。提交后先查有没有错题:没有 = 全对,直接进下一个节点;有 → 只把判错的题单独重问 AI(其余题不动),写入错题本后点「重做」。不可重复提交的节点提交后不再检测(改了也交不上去)</div></div>' +
-      '<div class="field"><div class="row"><div class="label">📕 有错题就修</div>' +
-        '<input id="cfgAccFixAll" type="checkbox" ' + (CONFIG.accFixAllWrong !== false ? 'checked' : '') + '></div>' +
-        '<div class="hint">开(默认):只要结果页有错题就重问并重做,哪怕整体准确率已经达标(追求全对)。关:只按下面的阈值判,准确率达标就算过,剩余错题不处理</div></div>' +
       '<div class="field"><div class="row"><div class="label">🎯 准确率阈值(%)</div></div>' +
         '<input id="cfgMinAcc" type="number" step="5" min="0" max="100" style="width:120px" value="' + Math.round((CONFIG.minAccuracy || 0) * 100) + '">' +
-        '<div class="hint">当前 ' + Math.round((CONFIG.minAccuracy || 0) * 100) + '%:关掉「有错题就修」时才生效 —— 准确率 ≥ 该值直接进下一节点;低于则把错题单独再问一遍 AI 并点「重做」。仅对可重复提交的节点生效。默认 90</div></div>' +
+        '<div class="hint">当前 ' + Math.round((CONFIG.minAccuracy || 0) * 100) + '%:提交后准确率低于该值,就把判错的题单独再问一遍 AI 并点「重做」。仅对可重复提交的节点生效。默认 100</div></div>' +
       '<div class="field"><div class="row"><div class="label">🔁 最多自动重做(次)</div></div>' +
         '<input id="cfgAccRedoMax" type="number" step="1" min="1" max="5" style="width:120px" value="' + (CONFIG.accRedoMax || 2) + '">' +
         '<div class="hint">同一节点最多自动重做几次(默认 2)。到上限就不再重做,记进「未提交」栏等人工处理,避免"重做→又没过→再重做"死循环</div></div>' +
@@ -485,12 +437,6 @@
       '<div class="field"><div class="row"><div class="label">📖 自动切章</div>' +
         '<input id="cfgJump" type="checkbox" ' + (CONFIG.autoJump ? 'checked' : '') + '></div>' +
         '<div class="hint">本章任务点全部完成后,自动进入下一章继续刷。切换时会确认页面真的换了章节(章节名或卡片地址变化),没换就重试最多 3 次;3 次都失败说明按钮无效或已是最后一章,会停下来而不是在原地反复扫描</div></div>' +
-      '<div class="field"><div class="row"><div class="label">📡 状态上报(调试用)</div></div>' +
-        '<input id="cfgReport" type="text" placeholder="http://127.0.0.1:8790/report" value="' + CONFIG.reportUrl + '">' +
-        '<div class="hint">留空 = 关闭。填入本机监听地址后,脚本会把当前页面状态(视频进度/任务点/题目容器/最近日志)定时推过去,方便本机程序或 AI 直接读真实状态。只发往你自己填的地址,不经过任何第三方服务器</div></div>' +
-      '<div class="field"><div class="row"><div class="label">📋 导出已收集题目</div>' +
-        '<button id="cfgExport" type="button" class="ghost">复制题目数据</button></div>' +
-        '<div class="hint">把做过的所有题目(题干+选项+答案)复制到剪贴板,可发给 AI 整理成考前手册;也可以拿去做题库备份</div></div>' +
       '<div class="btns"><button id="cfgSave" type="button">💾 保存</button></div>' +
       '</div>';
     document.body.appendChild(panel);
@@ -500,13 +446,10 @@
       if (CONFIG.speed > 2) CONFIG.speed = 2;
       CONFIG.webAiEnabled = document.getElementById('cfgWebAI').checked;
       CONFIG.webAiBatch = document.getElementById('cfgWebAiBatch').checked;
-      {
-        const vEl = document.getElementById('cfgVision');
-        if (vEl) CONFIG.aiVision = vEl.checked;
-      }
+      CONFIG.aiVision = true;   // 图片题看原图:已固定开启
       CONFIG.webAiUrl = document.getElementById('cfgWebAiUrl').value.trim() || 'https://chat.deepseek.com/';
-      CONFIG.deliberateErrorRate = (parseFloat(document.getElementById('cfgErrRate').value) || 0) / 100;
-      CONFIG.autoSubmit = document.getElementById('cfgSubmit').checked;
+      CONFIG.deliberateErrorRate = 0;   // 不故意答错:已固定
+      CONFIG.autoSubmit = true;         // 自动提交测验(填充率固定 100%):已固定
       // 进入页面是否自动开始(下次进入页面生效,不打断当前这一轮)
       {
         const asEl = document.getElementById('cfgAutoStart');
@@ -519,10 +462,7 @@
         }
       }
       // 卡住的章节是否自动跳过(默认开:否则平台风控卡住一个节点,整门课就停在这一章)
-      {
-        const skEl = document.getElementById('cfgSkipStuck');
-        if (skEl) CONFIG.skipStuckChapter = skEl.checked;
-      }
+      CONFIG.skipStuckChapter = true;   // 卡住就跳下一章:已固定开启
       // 定时关闭:HH:MM,填空 = 不关闭;格式非法则回滚到旧值并提示
       {
         const stopEl = document.getElementById('cfgStopAt');
@@ -540,10 +480,9 @@
       }
       // 填充率固定 100%(面板输入框只读),这里不需要读取
       // 提交后准确率检测
-      CONFIG.accCheckEnabled = document.getElementById('cfgAccCheck').checked;
+      CONFIG.accCheckEnabled = true;   // 提交后检测准确率:已固定开启
+      CONFIG.accFixAllWrong = true;    // 有错题就修:已固定开启
       {
-        const fixEl = document.getElementById('cfgAccFixAll');
-        CONFIG.accFixAllWrong = fixEl ? fixEl.checked : true;
         const redoEl = document.getElementById('cfgAccRedoMax');
         let rd = parseInt(redoEl && redoEl.value, 10);
         if (!isFinite(rd)) rd = 2;
@@ -558,42 +497,15 @@
         if (minEl) minEl.value = pct;
       }
       CONFIG.autoJump = document.getElementById('cfgJump').checked;
-      CONFIG.reportUrl = document.getElementById('cfgReport').value.trim();
+      CONFIG.reportUrl = '';   // 状态上报功能已移除
       saveConfig(CONFIG);
       applyStopClock();   // 定时关闭改动立即生效(不用刷新页面)
       log('配置已保存(倍速 ' + CONFIG.speed + 'x, 网页AI ' + (CONFIG.webAiEnabled ? '开' : '关') +
-        ', 自动提交 ' + (CONFIG.autoSubmit ? '填充率 100%' : '关') +
-        ', 准确率检测 ' + (!CONFIG.accCheckEnabled ? '关'
-          : (CONFIG.accFixAllWrong !== false ? '有错题就修' : '≥ ' + Math.round(CONFIG.minAccuracy * 100) + '%') +
-            ',最多重做 ' + (CONFIG.accRedoMax || 2) + ' 次') +
+        ', 准确率 ≥ ' + Math.round(CONFIG.minAccuracy * 100) + '%' +
         ', 定时关闭 ' + stopClockText() + ')', 'ok');
       panel.remove();
     });
     document.getElementById('cfgClose').addEventListener('click', () => panel.remove());
-    // 自动提交开关联动:关闭时填充率说明置灰(表示不再参与判定)
-    (function bindSubmitToggle() {
-      const subEl = document.getElementById('cfgSubmit');
-      const accEl = document.getElementById('cfgAccuracy');
-      if (!subEl || !accEl) return;
-      const sync = () => {
-        accEl.style.opacity = subEl.checked ? '1' : '0.4';
-      };
-      subEl.addEventListener('change', sync);
-      sync();
-    })();
-    // 准确率检测开关联动:关闭时阈值输入置灰
-    (function bindAccToggle() {
-      const chk = document.getElementById('cfgAccCheck');
-      const minEl = document.getElementById('cfgMinAcc');
-      if (!chk || !minEl) return;
-      const sync = () => {
-        minEl.disabled = !chk.checked;
-        minEl.style.opacity = chk.checked ? '1' : '0.45';
-      };
-      chk.addEventListener('change', sync);
-      sync();
-    })();
-    document.getElementById('cfgExport').addEventListener('click', exportQuestions);
     // 打开网页 AI:必须由用户点击触发,否则浏览器会当作弹窗拦截
     document.getElementById('cfgOpenWebAI').addEventListener('click', () => {
       const w = openWebAI();

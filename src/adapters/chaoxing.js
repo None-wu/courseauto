@@ -1089,8 +1089,23 @@
     if (!player) { log('无法获取播放器对象,跳过', 'err'); return; }
     try { player.muted(true); } catch (e) { /* ignore */ }
     try { player.playbackRate(CONFIG.speed); } catch (e) { /* ignore */ }
+    // 兜底:播放器自身触发 ratechange(内置倍速菜单/平台脚本改写)时立刻改回设定值
+    try {
+      let lastFix = 0;
+      player.on('ratechange', () => {
+        const t = Date.now();
+        if (t - lastFix < 300) return;   // 节流:防止播放器不接受该 rate 时来回抖动
+        const want = Number(CONFIG.speed) || 1;
+        let now = 1;
+        try { now = Number(player.playbackRate()) || 1; } catch (e) { now = 1; }
+        if (Math.abs(now - want) > 0.05) {
+          lastFix = t;
+          try { player.playbackRate(want); } catch (e) { /* ignore */ }
+        }
+      });
+    } catch (e) { /* ignore */ }
     try { player.play(); } catch (e) { /* ignore */ }
-    log(`▶ 开始播放视频(静音, ${CONFIG.speed}x 原速)`, 'ok');
+    log(`▶ 开始播放视频(静音, ${CONFIG.speed}x)`, 'ok');
     await new Promise((resolve) => {
       let finished = false;
       let timer = null;
@@ -1130,6 +1145,22 @@
             finish();
             return;
           }
+          // 倍速校正:超星播放器自带倍速菜单,弹题/重播/换任务点后会把 rate 重置回 1x,
+          // 出现"面板设了 2x 却按原速播"。每轮比对一次,不一致立即写回(容差 0.05)
+          try {
+            const want = Number(CONFIG.speed) || 1;
+            const now = Number(player.playbackRate()) || 1;
+            if (Math.abs(now - want) > 0.05) player.playbackRate(want);
+            // 再兜一层:平台脚本可能绕过 videojs 直接改 <video>.playbackRate
+            const vEl = win.document.getElementById('video_html5_api');
+            if (vEl) {
+              const vNow = Number(vEl.playbackRate) || 1;
+              if (Math.abs(vNow - want) > 0.05) {
+                vEl.playbackRate = want;
+                if (typeof player.playbackRate === 'function') player.playbackRate(want);
+              }
+            }
+          } catch (e) { /* ignore */ }
           if (player.paused()) {
             // 暂停 = 大概率是弹题,先在三个窗口里找题目(播放器iframe/章节iframe/顶层)
             await tryPopupQuiz([win, outerWin, window], player);

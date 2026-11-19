@@ -13,8 +13,8 @@
     stopAtTime: '',        // 定时关闭(HH:MM),到点自动停止挂机;留空 = 不关闭
     autoStart: true,       // 进入页面立即开始答题刷课;关掉 = 进页面先停在暂停态,手动点 ▶ 才开始
     skipStuckChapter: true, // 某章任务点多轮复检仍未完成时,记进「未提交」后自动切下一章;关掉 = 停在本章不再往下走
-    accCheckEnabled: false, // 提交后检测准确率(仅对「可重复提交」的任务点生效)
-    minAccuracy: 0.9,      // 提交后要求的准确率,低于则重问错题(需 accCheckEnabled)
+    accCheckEnabled: true,  // 提交后检测准确率(已固定开启,仅对「可重复提交」的任务点生效)
+    minAccuracy: 1,        // 提交后要求的准确率(默认 100%),低于则重问错题
     accFixAllWrong: true,  // 只要有错题就去修(不看整体准确率);关掉则仅在低于 minAccuracy 时才修
     accRedoMax: 2,          // 同一节点最多自动重做几次(防死循环)
     deliberateErrorRate: 0, // 故意答错率 0~0.2(0=不故意错)
@@ -72,6 +72,28 @@
     }
   } catch (e) { /* ignore */ }
   if (CONFIG.speed > 2) { CONFIG.speed = 2; }  // 倍速上限 2x
+
+  /* 一次性迁移(v1.6.0):面板精简,以下项改为固定值(不再提供开关)
+     - 图片题看原图固定开、跳章固定开、自动提交固定开(填充率 100%)
+     - 准确率检测 + 有错题就修固定开,阈值默认 100%
+     - 不故意答错、状态上报关闭 */
+  try {
+    const MIG = 'cxMigV160';
+    const done = (typeof GM_getValue !== 'undefined') ? GM_getValue(MIG, false) : localStorage.getItem(MIG);
+    if (!done) {
+      CONFIG.aiVision = true;
+      CONFIG.skipStuckChapter = true;
+      CONFIG.autoSubmit = true;
+      CONFIG.accCheckEnabled = true;
+      CONFIG.accFixAllWrong = true;
+      CONFIG.minAccuracy = 1;
+      CONFIG.deliberateErrorRate = 0;
+      CONFIG.reportUrl = '';
+      saveConfig(CONFIG);
+      if (typeof GM_setValue !== 'undefined') GM_setValue(MIG, true);
+      else localStorage.setItem(MIG, '1');
+    }
+  } catch (e) { /* ignore */ }
 
   /* 题目收集器:做过的题(题干+选项+答案)自动积累,导出后交给 AI 整理成考前手册 */
   let COLLECTED = [];

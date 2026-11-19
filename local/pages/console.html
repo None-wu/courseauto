@@ -6,18 +6,18 @@
 <title>运行状态 · 刷课助手</title>
 <style>
   :root{
-    --bg:#0d1012; --bg-2:#12161a; --card:#141a1e; --card-2:#181f24;
+    --bg:#07070a; --bg-2:#0d0d11; --card:#111114; --card-2:#16161a;
     --line:rgba(255,255,255,.07); --line-2:rgba(255,255,255,.12);
-    --white:#eef2f4; --txt:#c9d2d8; --txt-2:#8d9aa3; --txt-3:#5f6b73;
-    --ok:#6fe39b; --warn:#ffcf6b; --err:#ff7b72; --info:#7cc4ff; --net:#8fdcff; --sys:#9aa7ff;
+    --white:#fafafa; --txt:#e6e6ec; --txt-2:#9b9ba6; --txt-3:#6d6d78;
+    --ok:#fafafa; --warn:#d4d4d8; --err:#fafafa; --info:#d4d4d8; --net:#d4d4d8; --sys:#d4d4d8;
     --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Consolas,"Courier New",monospace;
   }
   *{box-sizing:border-box}
   html,body{margin:0;padding:0}
   body{
     background:
-      radial-gradient(900px 420px at 12% -10%,rgba(111,227,155,.07),transparent 60%),
-      radial-gradient(760px 380px at 92% -6%,rgba(124,196,255,.07),transparent 60%),
+      radial-gradient(900px 420px at 12% -10%,rgba(255,255,255,.07),transparent 60%),
+      radial-gradient(760px 380px at 92% -6%,rgba(255,255,255,.07),transparent 60%),
       var(--bg);
     color:var(--txt);font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
     -webkit-font-smoothing:antialiased;min-height:100vh;
@@ -29,8 +29,8 @@
   .logo{display:flex;align-items:center;gap:11px}
   .logo .mark{
     width:34px;height:34px;border-radius:11px;display:flex;align-items:center;justify-content:center;
-    font-weight:800;font-size:16px;color:#0c1113;
-    background:linear-gradient(145deg,#8ff0b6,#5ecf8b);box-shadow:0 4px 14px rgba(94,207,139,.28)
+    font-weight:800;font-size:16px;color:#0a0a0a;
+    background:linear-gradient(145deg,#fafafa,#c9c9cf);box-shadow:0 4px 14px rgba(255,255,255,.28)
   }
   .logo .name{display:flex;flex-direction:column;line-height:1.25}
   .logo .name b{font-size:15.5px;color:var(--white);letter-spacing:.2px}
@@ -42,9 +42,9 @@
     border:1px solid var(--line);border-radius:999px;padding:6px 11px;background:rgba(255,255,255,.02)
   }
   .vchip i{width:6px;height:6px;border-radius:50%;background:var(--txt-3);display:inline-block;flex:none;transition:background .2s}
-  .vchip.ok i{background:var(--ok);box-shadow:0 0 9px rgba(111,227,155,.65)}
-  .vchip.ok{color:#cfd8d2}
-  .vchip.bad i{background:var(--err);box-shadow:0 0 9px rgba(255,123,114,.6)}
+  .vchip.ok i{background:var(--ok);box-shadow:0 0 9px rgba(255,255,255,.65)}
+  .vchip.ok{color:#d4d4d8}
+  .vchip.bad i{background:var(--err);box-shadow:0 0 9px rgba(255,255,255,.6)}
   .btn{
     display:inline-flex;align-items:center;gap:6px;font-size:13px;font-family:inherit;cursor:pointer;
     color:var(--txt);background:rgba(255,255,255,.045);border:1px solid var(--line-2);
@@ -54,8 +54,8 @@
   .btn:active{transform:translateY(1px)}
   .btn.small{padding:6px 11px;font-size:12.5px;border-radius:8px}
   .btn.dim{color:var(--txt-2)}
-  .btn.danger:hover{background:rgba(255,123,114,.15);border-color:rgba(255,123,114,.45);color:#ffb3ad}
-  .btn.on{background:rgba(124,196,255,.16);border-color:rgba(124,196,255,.45);color:#cfe9ff}
+  .btn.danger:hover{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.45);color:#fafafa}
+  .btn.on{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.45);color:#f2f2f4}
 
   /* 首屏大卡片 */
   .hero{
@@ -63,8 +63,8 @@
     background:linear-gradient(160deg,rgba(255,255,255,.045),rgba(255,255,255,.012));
     display:flex;align-items:center;gap:18px;flex-wrap:wrap
   }
-  .hero .dot{width:11px;height:11px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(111,227,155,.14),0 0 16px rgba(111,227,155,.55);flex:none}
-  .hero.down .dot{background:var(--err);box-shadow:0 0 0 4px rgba(255,123,114,.14),0 0 16px rgba(255,123,114,.5)}
+  .hero .dot{width:11px;height:11px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(255,255,255,.14),0 0 16px rgba(255,255,255,.55);flex:none}
+  .hero.down .dot{background:var(--err);box-shadow:0 0 0 4px rgba(255,255,255,.14),0 0 16px rgba(255,255,255,.5)}
   .hero .tt{flex:1;min-width:220px}
   .hero .tt b{display:block;font-size:17px;color:var(--white);letter-spacing:.2px}
   .hero .tt span{display:block;font-size:12.5px;color:var(--txt-2);margin-top:4px}
@@ -100,7 +100,7 @@
     border:1px solid var(--line);color:var(--txt-2);background:transparent;font-family:inherit;transition:.15s
   }
   .chip:hover{color:var(--white);border-color:var(--line-2)}
-  .chip.on{background:rgba(124,196,255,.14);border-color:rgba(124,196,255,.4);color:#cfe9ff}
+  .chip.on{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.4);color:#f2f2f4}
   #logBox{
     height:min(50vh,420px);overflow:auto;padding:10px 0 14px;font-family:var(--mono);font-size:12.5px;line-height:1.85;
     scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.18) transparent
@@ -113,13 +113,13 @@
   .ln .lv{flex:none;width:34px;text-align:center;font-size:11px;border-radius:4px;height:18px;line-height:18px;margin-top:2px}
   .ln .tx{color:var(--txt);min-width:0}
   .ln.info .lv{color:var(--txt-2);background:rgba(255,255,255,.05)}
-  .ln.ok .lv{color:var(--ok);background:rgba(111,227,155,.12)}
-  .ln.warn .lv{color:var(--warn);background:rgba(255,207,107,.12)}
-  .ln.warn .tx{color:#f0e6cf}
-  .ln.err .lv{color:var(--err);background:rgba(255,123,114,.13)}
-  .ln.err .tx{color:#ffc9c5}
-  .ln.net .lv{color:var(--net);background:rgba(143,220,255,.12)}
-  .ln.sys .lv{color:var(--sys);background:rgba(154,167,255,.12)}
+  .ln.ok .lv{color:var(--ok);background:rgba(255,255,255,.12)}
+  .ln.warn .lv{color:var(--warn);background:rgba(255,255,255,.12)}
+  .ln.warn .tx{color:#e6e6ec}
+  .ln.err .lv{color:var(--err);background:rgba(255,255,255,.13)}
+  .ln.err .tx{color:#fafafa}
+  .ln.net .lv{color:var(--net);background:rgba(255,255,255,.12)}
+  .ln.sys .lv{color:var(--sys);background:rgba(255,255,255,.12)}
   .empty{padding:34px 16px;text-align:center;color:var(--txt-3);font-size:12.5px}
   .foot{
     display:flex;align-items:center;gap:10px;flex-wrap:wrap;
@@ -128,7 +128,7 @@
   .foot code{font-family:var(--mono);color:var(--txt-2);word-break:break-all}
   .toast{
     position:fixed;left:50%;bottom:26px;transform:translate(-50%,14px);opacity:0;pointer-events:none;
-    background:#1c2429;border:1px solid var(--line-2);color:var(--white);font-size:12.5px;
+    background:#1b1b20;border:1px solid var(--line-2);color:var(--white);font-size:12.5px;
     padding:9px 15px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.45);transition:.22s;z-index:9
   }
   .toast.on{opacity:1;transform:translate(-50%,0)}
@@ -148,8 +148,8 @@
   /* ---- 功能中心(从安装向导迁来):开始刷课 / 版本更新 / 本机设置 ---- */
   .panel .body{padding:14px 16px}
   .hint{font-size:11.5px;color:var(--txt-3)}
-  .btn.primary{background:linear-gradient(145deg,#8ff0b6,#5ecf8b);border-color:transparent;color:#0c1113;font-weight:700}
-  .btn.primary:hover{background:linear-gradient(145deg,#a2f7c4,#6bd99a);color:#0c1113}
+  .btn.primary{background:linear-gradient(145deg,#fafafa,#c9c9cf);border-color:transparent;color:#0a0a0a;font-weight:700}
+  .btn.primary:hover{background:linear-gradient(145deg,#ffffff,#d4d4d8);color:#0a0a0a}
   .btn:disabled{opacity:.55;cursor:default}
   .sites{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   @media(max-width:620px){.sites{grid-template-columns:1fr}}
@@ -157,7 +157,7 @@
     display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid var(--line-2);border-radius:11px;
     text-decoration:none;background:rgba(255,255,255,.028);transition:.15s;position:relative;min-width:0
   }
-  .site:hover{background:rgba(124,196,255,.1);border-color:rgba(124,196,255,.4)}
+  .site:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.4)}
   .site .nm{font-size:13.5px;color:var(--white);font-weight:700}
   .site .host{font-family:var(--mono);font-size:11px;color:var(--txt-3)}
   .site .kind{font-size:11px;color:var(--txt-2)}
@@ -175,8 +175,8 @@
     width:100%;font-family:inherit;font-size:13px;color:var(--white);background:rgba(255,255,255,.045);
     border:1px solid var(--line-2);border-radius:9px;padding:8px 10px;outline:none
   }
-  .field select:focus,.field input:focus{border-color:rgba(124,196,255,.55);background:rgba(124,196,255,.08)}
-  .field option{background:#141a1e;color:var(--white)}
+  .field select:focus,.field input:focus{border-color:rgba(255,255,255,.55);background:rgba(255,255,255,.08)}
+  .field option{background:#111114;color:var(--white)}
   .copybar{display:flex;align-items:center;gap:8px;border:1px dashed var(--line-2);border-radius:10px;padding:7px 9px;min-width:0}
   .copybar .val{flex:1;font-family:var(--mono);font-size:12.5px;color:var(--net);word-break:break-all;min-width:0}
   .frow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -192,7 +192,7 @@
   .ustat b{display:block;font-size:13px;color:var(--white);word-break:break-word}
   .ustat span{display:block;font-size:11.5px;color:var(--txt-2);line-height:1.6;margin-top:3px;word-break:break-word}
   .bar{height:6px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin:10px 0 0}
-  .bar i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#5ecf8b,#8ff0b6);transition:width .3s}
+  .bar i{display:block;height:100%;width:0;border-radius:999px;background:linear-gradient(90deg,#c9c9cf,#fafafa);transition:width .3s}
   .uacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:11px}
 </style>
 </head>
@@ -259,11 +259,6 @@
       <div class="v mono" id="pidTx">--</div>
       <div class="s" id="pidSub">--</div>
     </div>
-    <div class="cell" id="cMode">
-      <div class="k">启动形态</div>
-      <div class="v" id="modeTx">--</div>
-      <div class="s" id="modeSub">--</div>
-    </div>
     <div class="cell" id="cLog">
       <div class="k">日志留档</div>
       <div class="v" id="logN">0 条</div>
@@ -276,7 +271,6 @@
     <div class="head">
       <span class="t">开始刷课</span>
       <span class="sp"></span>
-      <span class="hint">脚本装好后从这里进课程页</span>
       <button class="btn small" id="toSetup2" title="查看安装步骤">安装步骤</button>
     </div>
     <div class="body">
@@ -376,7 +370,6 @@
     </div>
     <div id="logBox"><div class="empty" id="logEmpty">正在读取日志…</div></div>
     <div class="foot">
-      <span>日志同时写入</span><code id="logFileTx">--</code>
       <span class="sp" style="flex:1"></span>
       <span id="tickTx">每秒刷新</span>
     </div>
@@ -447,9 +440,7 @@
     $('liveTx').textContent = '运行中';
     $('hero').classList.remove('down');
     $('heroTitle').textContent = d.title + ' v' + d.version + ' 正在本机运行';
-    $('heroDesc').textContent = d.headless
-      ? '以无窗口方式启动(没有黑色命令行窗口),启动信息与日志都在本页。答题中转依赖本进程,请保持运行。'
-      : '本进程需保持运行以转发答题请求;关闭本网页不会退出程序。';
+    $('heroDesc').textContent = '本进程需保持运行以转发答题请求;关闭本网页不会退出程序。';
     $('portTx').textContent = '127.0.0.1:' + d.port;
     $('portSub').textContent = d.url;
     $('verTx').textContent = 'v' + d.version;
@@ -471,9 +462,6 @@
 
     $('pidTx').textContent = d.pid;
     $('pidSub').textContent = '启动于 ' + hms(d.startedAt);
-    $('modeTx').textContent = d.headless ? '无窗口(前端承载)' : '带控制台窗口';
-    $('modeSub').textContent = d.headless ? '双击不出黑窗' : '开发/调试模式';
-    $('logFileTx').textContent = d.logFile || '--';
   }
 
   function applyDead() {
@@ -506,7 +494,7 @@
           renderRows();
         }
         $('logN').textContent = (d.seq || 0) + ' 条';
-        $('logSub').textContent = '缓冲上限 ' + ((d.keep || 400)) + ' 条,留档见下方路径';
+        $('logSub').textContent = '缓冲上限 ' + ((d.keep || 400)) + ' 条';
       })
       .catch(applyDead);
   }
@@ -622,14 +610,18 @@
 
     if (u.state === 'checking') {
       $('ubIc').textContent = '…';
-      $('ubTitle').textContent = '正在检测更新…';
+      $('ubDesc').hidden = false;
+      $('ubDesc').hidden = false;
+    $('ubTitle').textContent = '正在检测更新…';
       $('ubDesc').textContent = '当前 v' + cur;
       return;
     }
     if (u.state === 'has-update') {
       var skipped = !!u.skippedVersion && u.skippedVersion === u.latest;
       $('ubIc').textContent = '↑';
-      $('ubTitle').textContent = '发现新版本 v' + u.latest + (skipped ? '(已跳过)' : '');
+      $('ubDesc').hidden = false;
+      $('ubDesc').hidden = false;
+    $('ubTitle').textContent = '发现新版本 v' + u.latest + (skipped ? '(已跳过)' : '');
       $('ubDesc').textContent = '当前 v' + cur
         + (u.asset ? (' · ' + u.asset.name + (u.asset.size ? ' ' + fmtSize(u.asset.size) : '')) : '')
         + '。下载完关掉本程序,运行新 exe 覆盖安装即可。';
@@ -642,10 +634,12 @@
     if (u.state === 'up-to-date') {
       $('ubIc').textContent = '✓';
       $('ubTitle').textContent = '已是最新版本 v' + cur;
-      $('ubDesc').textContent = '启动时已自动检测过,无需更新。';
+      $('ubDesc').hidden = true;
+      $('ubDesc').textContent = '';
       return;
     }
     $('ubIc').textContent = '!';
+    $('ubDesc').hidden = false;
     $('ubTitle').textContent = '无法检测更新';
     $('ubDesc').textContent = '当前 v' + cur + ',连不上 GitHub(不影响刷课与答题中转),可稍后再点「检查更新」,或用「打开下载页」手动下载。';
     $('ubPage').hidden = false;

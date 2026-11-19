@@ -45,9 +45,6 @@ const LIFE = { port: 0 };
 let SERVER = null;
 const RELAY = { asked: 0, answered: 0 };
 
-const LOG_FILE = path.join(DATA_DIR, 'logs', 'app.log');
-let LOG_STREAM = null;
-
 const C = {
   reset: '\x1b[0m', dim: '\x1b[2m', bold: '\x1b[1m', gray: '\x1b[90m',
   red: '\x1b[31m', green: '\x1b[32m', yellow: '\x1b[33m',
@@ -61,22 +58,11 @@ function hhmmss() {
   return `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
 }
 
-function appendLogFile(lv, tx) {
-  try {
-    if (!LOG_STREAM) {
-      fs.mkdirSync(path.dirname(LOG_FILE), { recursive: true });
-      LOG_STREAM = fs.createWriteStream(LOG_FILE, { flags: 'a' });
-    }
-    LOG_STREAM.write(`${new Date().toISOString()} [${lv}] ${tx}\n`);
-  } catch { /* 落盘失败不影响主流程 */ }
-}
-
 function logLine(lv, msg, opts) {
   const tx = String(msg == null ? '' : msg).replace(/\x1b\[[0-9;]*m/g, '');
   LOG_SEQ += 1;
   LOGS.push({ seq: LOG_SEQ, t: Date.now(), lv, tx });
   if (LOGS.length > LOG_MAX) LOGS.splice(0, LOGS.length - LOG_MAX);
-  appendLogFile(lv, tx);
   if (!TTY || (opts && opts.quiet)) return;
   const c = LV_COLOR[lv] || C.white;
   for (const one of tx.split('\n')) {
@@ -432,7 +418,7 @@ async function appRoutes(req, res, url) {
       node: process.version,
       platform: process.platform,
       dataDir: DATA_DIR,
-      logFile: LOG_FILE,
+      logFile: '',   // 日志不再落盘(只保留内存环形缓冲,避免占用系统盘)
       update: { state: UPDATE.state || 'checking', latest: UPDATE.latest || '', text: updateText() },
       browser: { key: PREFS.browser || 'auto', label: labelOf(PREFS.browser || 'auto') },
       relay: { asked: RELAY.asked, answered: RELAY.answered },

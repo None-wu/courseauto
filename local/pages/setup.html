@@ -224,6 +224,8 @@
 
   footer{color:#5c5c66;font-size:12px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
        margin-top:26px;padding-top:16px;border-top:1px solid rgba(255,255,255,.055)}
+  footer.donebar{justify-content:center;padding-top:22px;margin-top:30px}
+  footer.donebar .btn{padding:10px 26px;font-size:14px}
 
   /* ================= 响应式 ================= */
   @media (max-width:720px){
@@ -280,16 +282,6 @@
     </div>
   </div>
 
-  <!-- 更新条 -->
-  <div class="migbar">
-    <div class="mb-tx">
-      <b>检测更新、开始刷课、本机设置已移到「运行状态」页</b>
-      <span>装好脚本后直接进运行状态页操作；以后双击 exe 也会自动进这里。</span>
-    </div>
-    <a class="btn small" href="/console">进运行状态</a>
-    <button class="btn small primary" id="finishSetup">我已装好</button>
-  </div>
-
   <div class="ubar" id="ubar" hidden>
     <div class="row1">
       <span class="ic" id="ubIc">↑</span>
@@ -302,17 +294,6 @@
       </div>
     </div>
     <div class="bar" id="ubBar" hidden><i id="ubBarIn"></i></div>
-  </div>
-
-  <div class="hero">
-    <div class="badge"><i></i>Local Setup · 本机检测</div>
-    <h1>一键装好，直接开刷</h1>
-    <p class="lead">自动检测本机油猴与开关状态，通过后点按钮装脚本，不用复制代码。<a href="/console">已经装好了？直接进运行状态 →</a></p>
-    <ul class="stats">
-      <li><b>4 步</b><span>全程约 1 分钟</span></li>
-      <li><b>免复制代码</b><span>一键写入油猴</span></li>
-      <li><b>只读本机配置</b><span>数据不外传</span></li>
-    </ul>
   </div>
 
   <section id="step1" class="step">
@@ -408,9 +389,8 @@
     </section>
   </div>
 
-  <footer>
-    <span>只读本机浏览器配置目录，数据不外传。</span>
-    <span>刷课助手 · 本地运行，无需联网权限</span>
+  <footer class="donebar">
+    <button class="btn primary" id="finishSetup">我已装好</button>
   </footer>
 </div>
 
