@@ -249,6 +249,17 @@
     *{animation:none!important;transition:none!important}
     html{scroll-behavior:auto}
   }
+
+  /* ---- 已迁到「运行状态」页的区块(DOM 保留给脚本用,页面不再展示) ---- */
+  [hidden]{display:none !important}
+  #ubar,#updCheck,#step4,.divider,.sectitle,.setgrid{display:none !important}
+  .migbar{
+    display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:14px 0 2px;padding:11px 14px;
+    border-radius:12px;border:1px solid rgba(124,196,255,.34);background:rgba(124,196,255,.09)
+  }
+  .migbar .mb-tx{flex:1;min-width:180px}
+  .migbar b{display:block;font-size:13px;color:var(--white)}
+  .migbar span{display:block;font-size:12px;color:var(--txt-2);margin-top:2px}
 </style>
 </head>
 <body>
@@ -264,12 +275,21 @@
     <div class="toolbar">
       <span class="vchip" id="vchip"><i></i><span id="vchipTx">检测中…</span></span>
       <button class="btn small" id="recheck" title="重新检测本机环境"><span class="i">⟳</span><span class="t">重新检测</span></button>
-      <button class="btn small" id="updCheck" title="检查是否有新版本"><span class="i">↑</span><span class="t">检查更新</span></button>
+      <button class="btn small" id="updCheck" hidden title="检查是否有新版本"><span class="i">↑</span><span class="t">检查更新</span></button>
       <a class="btn small" id="toConsole" href="/console" target="_blank" rel="noopener" style="text-decoration:none" title="查看运行状态与运行日志"><span class="i">◉</span><span class="t">运行状态</span></a>
     </div>
   </div>
 
   <!-- 更新条 -->
+  <div class="migbar">
+    <div class="mb-tx">
+      <b>检测更新、开始刷课、本机设置已移到「运行状态」页</b>
+      <span>装好脚本后直接进运行状态页操作；以后双击 exe 也会自动进这里。</span>
+    </div>
+    <a class="btn small" href="/console">进运行状态</a>
+    <button class="btn small primary" id="finishSetup">我已装好</button>
+  </div>
+
   <div class="ubar" id="ubar" hidden>
     <div class="row1">
       <span class="ic" id="ubIc">↑</span>
@@ -287,7 +307,7 @@
   <div class="hero">
     <div class="badge"><i></i>Local Setup · 本机检测</div>
     <h1>一键装好，直接开刷</h1>
-    <p class="lead">自动检测本机油猴与开关状态，通过后点按钮装脚本，不用复制代码。<a href="#step4">已经装好了？直接去刷课 →</a></p>
+    <p class="lead">自动检测本机油猴与开关状态，通过后点按钮装脚本，不用复制代码。<a href="/console">已经装好了？直接进运行状态 →</a></p>
     <ul class="stats">
       <li><b>4 步</b><span>全程约 1 分钟</span></li>
       <li><b>免复制代码</b><span>一键写入油猴</span></li>
@@ -333,7 +353,7 @@
     <p class="note" id="verNote">油猴确认页顶部显示的版本号应与本页一致，不一致说明装的是旧条目。</p>
   </section>
 
-  <section id="step4" class="step">
+  <section id="step4" hidden class="step">
     <span class="num">4</span>
     <h2>开始刷课</h2>
     <div class="sites">
@@ -355,10 +375,10 @@
     <p class="note">用「网页 AI」答题时，别关掉本程序的黑色窗口 —— 题目靠它转发。</p>
   </section>
 
-  <div class="divider"></div>
-  <p class="sectitle">本机设置</p>
+  <div class="divider" hidden></div>
+  <p class="sectitle" hidden>本机设置</p>
 
-  <div class="setgrid">
+  <div class="setgrid" hidden>
     <section>
       <h2>打开方式</h2>
       <div class="field">
@@ -790,6 +810,25 @@
     setTimeout(function () { load(false); tick(); }, pollDelay);
   })();
 })();
+
+// 「我已装好」:标记向导已完成,以后启动直接进运行状态页
+document.addEventListener('DOMContentLoaded', function () {
+  var b = document.getElementById('finishSetup');
+  if (!b) return;
+  b.addEventListener('click', function () {
+    b.disabled = true;
+    b.textContent = '已记下';
+    fetch('/api/prefs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ setupDone: true })
+    }).then(function () {
+      location.href = '/console';
+    }, function () {
+      location.href = '/console';
+    });
+  });
+});
 </script>
 </body>
 </html>

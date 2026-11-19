@@ -25,6 +25,8 @@ const DEFAULT_PORT = 8790;
 const ARGV = process.argv.slice(2);
 const PORT = Number((ARGV.find((a) => /^--port=/.test(a)) || '').split('=')[1]) || DEFAULT_PORT;
 const NO_OPEN = ARGV.includes('--no-open');
+const FORCE_SETUP = ARGV.includes('--setup');        // 本次强制打开安装向导(即使已经装过)
+const RESET_SETUP = ARGV.includes('--reset-setup');  // 清掉"向导已完成"标记,下次启动重新进向导
 
 // 采集到的页面结构落在用户数据目录:exe 可能被放在只读目录,不能写在自己旁边
 const DATA_DIR = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), '.xuexitong-assistant'), 'XueXiTongAssistant');
@@ -134,8 +136,17 @@ async function runUpdateCheck(force = false) {
 
 /* ==================== 浏览器打开方式 ==================== */
 let PREFS = loadPrefs(DATA_DIR);
+if (RESET_SETUP) {
+  PREFS = savePrefs(DATA_DIR, { firstRunDone: false, setupDone: false });
+  console.log('  [设置] 已清除"向导已完成"标记,本次启动重新打开安装向导');
+}
 
-function urlOf(port) { return `http://127.0.0.1:${port}/setup`; }
+// 首启进安装向导,之后每次启动直接进运行状态页
+function setupDone() { return !!(PREFS.firstRunDone || PREFS.setupDone); }
+function entryPath() { return (FORCE_SETUP || !setupDone()) ? '/setup' : '/console'; }
+function urlOf(port) { return `http://127.0.0.1:${port}${entryPath()}`; }
+function wizardUrl(port) { return `http://127.0.0.1:${port}/setup`; }
+function statusUrl(port) { return `http://127.0.0.1:${port}/console`; }
 
 function labelOf(key) {
   const hit = BROWSER_CHOICES.find((c) => c.key === key);
@@ -182,9 +193,9 @@ async function launchWizard(port, { firstRun = false } = {}) {
       const p = ARGV.find((a) => /^--browser=/.test(a));
       PREFS = savePrefs(DATA_DIR, { browser: 'custom', browserPath: p ? p.split('=')[1] : '', firstRunDone: true });
     } else {
-      PREFS = savePrefs(DATA_DIR, { browser: key, firstRunDone: true });
+      PREFS = savePrefs(DATA_DIR, { browser: key, firstRunDone: true, setupDone: true });
     }
-    console.log(`  已记住:以后用「${labelOf(PREFS.browser)}」打开向导(可在向导页里改)`);
+    console.log(`  已记住:以后用「${labelOf(PREFS.browser)}」打开(可在运行状态页改)`);
   }
   if (PREFS.browser === 'none') {
     console.log(`  按你的设置不自动打开浏览器,请手动访问:${url}`);
@@ -225,6 +236,7 @@ async function localRoutes(req, res, url) {
         browser: PREFS.browser || '',
         browserPath: PREFS.browserPath || '',
         firstRunDone: !!PREFS.firstRunDone,
+        setupDone: setupDone(),
         skippedVersion: PREFS.skippedVersion || '',
         choices: BROWSER_CHOICES,
         detected: detectBrowsers()
@@ -233,6 +245,13 @@ async function localRoutes(req, res, url) {
     }
     if (req.method === 'POST') {
       const b = await readBody(req);
+      // 只标记「向导已完成」(不动浏览器设置):之后启动直接进运行状态页
+      if (b.setupDone && !String(b.browser || '').trim()) {
+        PREFS = savePrefs(DATA_DIR, { setupDone: true });
+        console.log('  [设置] 安装向导已标记完成,以后启动直接进运行状态页');
+        json(res, 200, { ok: true, setupDone: true, browser: PREFS.browser || '' });
+        return true;
+      }
       const key = String(b.browser || '').trim();
       const valid = BROWSER_CHOICES.some((c) => c.key === key) || key === 'custom';
       if (!valid) { json(res, 400, { ok: false, error: '未知的浏览器选项' }); return true; }
@@ -241,9 +260,9 @@ async function localRoutes(req, res, url) {
         let ok = false;
         try { ok = !!bp && fs.existsSync(bp) && /\.(exe|app)$/i.test(bp); } catch { ok = false; }
         if (!ok) { json(res, 400, { ok: false, error: '自定义浏览器路径不存在或不是可执行文件' }); return true; }
-        PREFS = savePrefs(DATA_DIR, { browser: key, browserPath: bp, firstRunDone: true });
+        PREFS = savePrefs(DATA_DIR, { browser: key, browserPath: bp, firstRunDone: true, setupDone: true });
       } else {
-        PREFS = savePrefs(DATA_DIR, { browser: key, firstRunDone: true });
+        PREFS = savePrefs(DATA_DIR, { browser: key, firstRunDone: true, setupDone: true });
       }
       console.log(`  [设置] 打开方式已改为:${labelOf(PREFS.browser)}`);
       json(res, 200, { ok: true, browser: PREFS.browser, browserPath: PREFS.browserPath });
@@ -320,10 +339,11 @@ function banner(port, reuse, opts = {}) {
   const base = `http://127.0.0.1:${LIFE.port}`;
   const upTxt = updateText();
   const openTxt = `${labelOf(PREFS.browser || 'auto')}${PREFS.browser === 'none' ? '(按设置不自动开)' : ''}`;
+  const firstRun = !setupDone();
   const plain = [
     `${TITLE} v${VERSION} 已启动 · 端口 ${LIFE.port}${reuse ? ' · 复用已在运行的实例' : ''}`,
-    `安装向导 ${base}/setup`,
-    `运行状态 ${base}/console`,
+    firstRun ? `首次使用 ${base}/setup  (装好后自动进运行状态页)` : `运行状态 ${base}/console  (安装向导 ${base}/setup)`,
+    `本次打开 ${base}${entryPath()}`,
     `版本更新 ${upTxt}`,
     `打开方式 ${openTxt}`,
     reuse ? '已有实例在运行,无需重复启动' : '本进程需保持运行(答题中转靠它);关闭网页不影响,退出请到状态页点「退出程序」'
@@ -337,6 +357,7 @@ function banner(port, reuse, opts = {}) {
     const out = [''];
     out.push(`  ${C.bold}${C.white}${TITLE} v${VERSION}${C.reset}    ${C.green}● 运行中${C.reset}`);
     out.push(`  ${C.gray}${line('─', 54)}${C.reset}`);
+    out.push(`  ${C.gray}本次打开${C.reset}  ${C.cyan}${base}${entryPath()}${C.reset}  ${C.dim}${firstRun ? '(首次使用,先装脚本)' : '(直接进运行状态)'}${C.reset}`);
     out.push(`  ${C.gray}安装向导${C.reset}  ${C.cyan}${base}/setup${C.reset}`);
     out.push(`  ${C.gray}运行状态${C.reset}  ${C.cyan}${base}/console${C.reset}`);
     out.push(`  ${C.gray}版本更新${C.reset}  ${upTxt.startsWith('发现') ? C.yellow : C.white}${upTxt}${C.reset}`);
@@ -400,6 +421,10 @@ async function appRoutes(req, res, url) {
       version: VERSION,
       port: LIFE.port,
       url: `http://127.0.0.1:${LIFE.port}`,
+      entry: entryPath(),
+      setupDone: setupDone(),
+      setupUrl: wizardUrl(LIFE.port),
+      consoleUrl: statusUrl(LIFE.port),
       pid: process.pid,
       startedAt: START_AT,
       uptime: Date.now() - START_AT,
