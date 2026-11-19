@@ -192,7 +192,6 @@
     if (!q) return [];
     if (Array.isArray(q.images)) return q.images;
     q.images = [];
-    if (CONFIG.aiVision === false) return q.images;      // 用户关了「图片题看原图」
     const total = markQuestionImages(q);
     if (!total) return q.images;
     const list = (q.imgSrc || []).slice(0, IMG_MAX_COUNT);

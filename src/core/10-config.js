@@ -4,7 +4,6 @@
     autoVideo: true,       // 自动处理视频任务
     autoAudio: true,       // 自动处理音频任务
     autoWork: true,        // 自动做章节测验
-    autoSubmit: true,      // 填充率 100%(所有题都作答成功)才自动提交测验
     autoJump: true,        // 本章完成后自动切下一章
     answerIntervalMin: 0,  // 每题最小间隔(秒,0=最快)
     answerIntervalMax: 0,  // 每题最大间隔(秒,0=最快)
@@ -12,29 +11,24 @@
     submitDelayMax: 0,     // 提交前最大延迟(秒,0=最快)
     stopAtTime: '',        // 定时关闭(HH:MM),到点自动停止挂机;留空 = 不关闭
     autoStart: true,       // 进入页面立即开始答题刷课;关掉 = 进页面先停在暂停态,手动点 ▶ 才开始
-    skipStuckChapter: true, // 某章任务点多轮复检仍未完成时,记进「未提交」后自动切下一章;关掉 = 停在本章不再往下走
-    accCheckEnabled: true,  // 提交后检测准确率(已固定开启,仅对「可重复提交」的任务点生效)
     minAccuracy: 1,        // 提交后要求的准确率(默认 100%),低于则重问错题
-    accFixAllWrong: true,  // 只要有错题就去修(不看整体准确率);关掉则仅在低于 minAccuracy 时才修
     accRedoMax: 2,          // 同一节点最多自动重做几次(防死循环)
-    deliberateErrorRate: 0, // 故意答错率 0~0.2(0=不故意错)
     useTiku: false,         // 免费题库站(已停止免费,默认关闭,纯 AI 答题)
-    reportUrl: '',          // 状态上报地址(调试用,留空=关闭);如 http://127.0.0.1:8790/report
     webAiEnabled: false,    // 网页 AI 答题(免 Key,需配合「网页AI桥」脚本)
     webAiBatch: true,       // 整卷模式:整页题目一次性发给网页 AI,批量解析后逐题填写(更快、不易限流;缺漏的题自动回退逐题询问)
     webAiBatchRetry: true,  // 整卷缺题时再整批补问一次(关掉则直接逐题回退)
     webAiUrl: 'https://chat.deepseek.com/',  // 网页 AI 地址
     webAiRelay: 'http://127.0.0.1:8790',     // 本地中转服务(桥脚本经此收题,AI 页手动打开即可)
     webAiTimeout: 60,       // 等网页 AI 回复的超时(秒)
-    aiVision: true,         // 图片题:把题干里的图片抽出来随题发送(AI 才能"看图作答")
   };
 
+  let HAD_SAVED_CONFIG = false;   // 首次安装 = false:老版本迁移只对老存档生效,不覆盖新装默认值
   function loadConfig() {
     try {
       const saved = (typeof GM_getValue !== 'undefined')
         ? GM_getValue('cxConfig', null)
         : JSON.parse(localStorage.getItem('cxConfig') || 'null');
-      if (saved && typeof saved === 'object') return Object.assign({}, DEFAULT_CONFIG, saved);
+      if (saved && typeof saved === 'object') { HAD_SAVED_CONFIG = true; return Object.assign({}, DEFAULT_CONFIG, saved); }
     } catch (e) { /* ignore */ }
     return Object.assign({}, DEFAULT_CONFIG);
   }
@@ -50,7 +44,7 @@
     const MIG = 'cxMigV105';
     const done = (typeof GM_getValue !== 'undefined') ? GM_getValue(MIG, false) : localStorage.getItem(MIG);
     if (!done) {
-      CONFIG.speed = 2;
+      if (HAD_SAVED_CONFIG) CONFIG.speed = 2;   // 全新安装本就是默认 2x,不属于需要升级的老存档
       saveConfig(CONFIG);
       if (typeof GM_setValue !== 'undefined') GM_setValue(MIG, true);
       else localStorage.setItem(MIG, '1');
@@ -65,7 +59,9 @@
       delete CONFIG.dailyLimitMinutes;
       delete CONFIG.quizDelayMin;
       delete CONFIG.quizDelayMax;
-      CONFIG.minAccuracy = 0.9;
+      // 老存档里的 minAccuracy 是「提交前正确率门槛」,语义已变才重置为 90%;
+      // 全新安装没有这个历史包袱,保持默认 100%
+      if (HAD_SAVED_CONFIG) CONFIG.minAccuracy = 0.9;
       saveConfig(CONFIG);
       if (typeof GM_setValue !== 'undefined') GM_setValue(MIG, true);
       else localStorage.setItem(MIG, '1');
@@ -73,54 +69,22 @@
   } catch (e) { /* ignore */ }
   if (CONFIG.speed > 2) { CONFIG.speed = 2; }  // 倍速上限 2x
 
-  /* 一次性迁移(v1.6.0):面板精简,以下项改为固定值(不再提供开关)
-     - 图片题看原图固定开、跳章固定开、自动提交固定开(填充率 100%)
-     - 准确率检测 + 有错题就修固定开,阈值默认 100%
-     - 不故意答错、状态上报关闭 */
+  /* 一次性迁移(v1.6.1):v1.6.0 面板精简掉的控件,其配置键现在也一并从代码里移除。
+     行为已固定:看原图、卡住跳章、填充率 100% 才提交、有错题就修、不故意答错、不上报状态。
+     这里清掉老版本存档里的残留键,免得旧值继续被存盘 */
   try {
-    const MIG = 'cxMigV160';
+    const MIG = 'cxMigV161';
     const done = (typeof GM_getValue !== 'undefined') ? GM_getValue(MIG, false) : localStorage.getItem(MIG);
     if (!done) {
-      CONFIG.aiVision = true;
-      CONFIG.skipStuckChapter = true;
-      CONFIG.autoSubmit = true;
-      CONFIG.accCheckEnabled = true;
-      CONFIG.accFixAllWrong = true;
-      CONFIG.minAccuracy = 1;
-      CONFIG.deliberateErrorRate = 0;
-      CONFIG.reportUrl = '';
+      ['aiVision', 'skipStuckChapter', 'autoSubmit', 'accCheckEnabled', 'accFixAllWrong',
+       'deliberateErrorRate', 'reportUrl'].forEach((k) => { delete CONFIG[k]; });
+      // 注意:准确率阈值是面板保留的可调项,迁移不能覆盖用户设定,只清残留键
       saveConfig(CONFIG);
       if (typeof GM_setValue !== 'undefined') GM_setValue(MIG, true);
       else localStorage.setItem(MIG, '1');
     }
   } catch (e) { /* ignore */ }
 
-  /* 题目收集器:做过的题(题干+选项+答案)自动积累,导出后交给 AI 整理成考前手册 */
-  let COLLECTED = [];
-  try {
-    COLLECTED = (typeof GM_getValue !== 'undefined')
-      ? GM_getValue('cxQuestions', [])
-      : JSON.parse(localStorage.getItem('cxQuestions') || '[]');
-    if (!Array.isArray(COLLECTED)) COLLECTED = [];
-  } catch (e) { COLLECTED = []; }
-  function recordQuestion(q, answer) {
-    try {
-      COLLECTED.push({ q: q.question, t: String(q.type), o: (q.options || []).join('§'), a: (answer || []).join('|') });
-      if (COLLECTED.length > 5000) COLLECTED = COLLECTED.slice(-5000);
-      if (typeof GM_setValue !== 'undefined') GM_setValue('cxQuestions', COLLECTED);
-      else localStorage.setItem('cxQuestions', JSON.stringify(COLLECTED));
-    } catch (e) { /* ignore */ }
-  }
-  function exportQuestions() {
-    if (!COLLECTED.length) { log('📋 还没有收集到题目(做完学习检测/弹题后自动收集)', 'warn'); return; }
-    const data = JSON.stringify(COLLECTED);
-    const done = () => log(`📋 已导出 ${COLLECTED.length} 道题,全选复制发给 AI 助手`, 'ok');
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(data).then(done).catch(() => { showExportBox(data); });
-      } else showExportBox(data);
-    } catch (e) { showExportBox(data); }
-  }
   function showExportBox(data) {
     const ta = document.createElement('textarea');
     ta.value = data;
@@ -128,7 +92,7 @@
     document.body.appendChild(ta);
     ta.focus(); ta.select();
     ta.addEventListener('blur', () => { try { ta.remove(); } catch (e) {} });
-    log('📋 题目数据已生成在左下角文本框,全选(Ctrl+A)复制后发给 AI 助手', 'ok');
+    log('📋 数据已生成在左下角文本框,全选(Ctrl+A)复制即可', 'ok');
   }
 
   /* ==================== 错题本 ==================== */

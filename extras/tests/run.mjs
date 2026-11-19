@@ -150,7 +150,7 @@ async function main() {
 
   // 上报链路
   const rep = await (await fetch(`${base}/report/last`)).json();
-  record('状态上报链路可用', Array.isArray(rep) && rep.length > 0, `收到 ${rep.length} 条快照`);
+  record('状态上报已下线(无任何快照外发)', Array.isArray(rep) && rep.length === 0, `收到 ${rep.length} 条快照`);
 
   await page.screenshot({ path: path.join(OUT, 'run.png'), fullPage: false });
   if (webai) {

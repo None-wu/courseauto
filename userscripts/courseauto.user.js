@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         刷课助手(学习通/智慧树/雨课堂)
 // @namespace    cx-auto-study
-// @version      1.6.0
+// @version      1.6.1
 // @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
 // @author       courseauto contributors
 // @license      Personal Use Only (No Commercial Use) — see LICENSE
@@ -25,7 +25,7 @@
 // @connect      cdn.jsdelivr.net
 // 题目图片散落在各站资源域(p.ananas.chaoxing.com / 智树图床 / 雨课堂 CDN 等),
 // 域名多且会变,图片题要"看图作答"就必须能用油猴跨域把图抓成 dataURL。
-// 只影响图片下载这一条链路;不需要图片功能时把配置 aiVision 关掉即可。
+// 图片题干里的图片会随题一起发给 AI(看图作答),此链路始终开启。
 // @connect      *
 // @noframes
 // ==/UserScript==
@@ -64,7 +64,6 @@
     autoVideo: true,       // 自动处理视频任务
     autoAudio: true,       // 自动处理音频任务
     autoWork: true,        // 自动做章节测验
-    autoSubmit: true,      // 填充率 100%(所有题都作答成功)才自动提交测验
     autoJump: true,        // 本章完成后自动切下一章
     answerIntervalMin: 0,  // 每题最小间隔(秒,0=最快)
     answerIntervalMax: 0,  // 每题最大间隔(秒,0=最快)
@@ -72,29 +71,24 @@
     submitDelayMax: 0,     // 提交前最大延迟(秒,0=最快)
     stopAtTime: '',        // 定时关闭(HH:MM),到点自动停止挂机;留空 = 不关闭
     autoStart: true,       // 进入页面立即开始答题刷课;关掉 = 进页面先停在暂停态,手动点 ▶ 才开始
-    skipStuckChapter: true, // 某章任务点多轮复检仍未完成时,记进「未提交」后自动切下一章;关掉 = 停在本章不再往下走
-    accCheckEnabled: true,  // 提交后检测准确率(已固定开启,仅对「可重复提交」的任务点生效)
     minAccuracy: 1,        // 提交后要求的准确率(默认 100%),低于则重问错题
-    accFixAllWrong: true,  // 只要有错题就去修(不看整体准确率);关掉则仅在低于 minAccuracy 时才修
     accRedoMax: 2,          // 同一节点最多自动重做几次(防死循环)
-    deliberateErrorRate: 0, // 故意答错率 0~0.2(0=不故意错)
     useTiku: false,         // 免费题库站(已停止免费,默认关闭,纯 AI 答题)
-    reportUrl: '',          // 状态上报地址(调试用,留空=关闭);如 http://127.0.0.1:8790/report
     webAiEnabled: false,    // 网页 AI 答题(免 Key,需配合「网页AI桥」脚本)
     webAiBatch: true,       // 整卷模式:整页题目一次性发给网页 AI,批量解析后逐题填写(更快、不易限流;缺漏的题自动回退逐题询问)
     webAiBatchRetry: true,  // 整卷缺题时再整批补问一次(关掉则直接逐题回退)
     webAiUrl: 'https://chat.deepseek.com/',  // 网页 AI 地址
     webAiRelay: 'http://127.0.0.1:8790',     // 本地中转服务(桥脚本经此收题,AI 页手动打开即可)
     webAiTimeout: 60,       // 等网页 AI 回复的超时(秒)
-    aiVision: true,         // 图片题:把题干里的图片抽出来随题发送(AI 才能"看图作答")
   };
 
+  let HAD_SAVED_CONFIG = false;   // 首次安装 = false:老版本迁移只对老存档生效,不覆盖新装默认值
   function loadConfig() {
     try {
       const saved = (typeof GM_getValue !== 'undefined')
         ? GM_getValue('cxConfig', null)
         : JSON.parse(localStorage.getItem('cxConfig') || 'null');
-      if (saved && typeof saved === 'object') return Object.assign({}, DEFAULT_CONFIG, saved);
+      if (saved && typeof saved === 'object') { HAD_SAVED_CONFIG = true; return Object.assign({}, DEFAULT_CONFIG, saved); }
     } catch (e) { /* ignore */ }
     return Object.assign({}, DEFAULT_CONFIG);
   }
@@ -110,7 +104,7 @@
     const MIG = 'cxMigV105';
     const done = (typeof GM_getValue !== 'undefined') ? GM_getValue(MIG, false) : localStorage.getItem(MIG);
     if (!done) {
-      CONFIG.speed = 2;
+      if (HAD_SAVED_CONFIG) CONFIG.speed = 2;   // 全新安装本就是默认 2x,不属于需要升级的老存档
       saveConfig(CONFIG);
       if (typeof GM_setValue !== 'undefined') GM_setValue(MIG, true);
       else localStorage.setItem(MIG, '1');
@@ -125,7 +119,9 @@
       delete CONFIG.dailyLimitMinutes;
       delete CONFIG.quizDelayMin;
       delete CONFIG.quizDelayMax;
-      CONFIG.minAccuracy = 0.9;
+      // 老存档里的 minAccuracy 是「提交前正确率门槛」,语义已变才重置为 90%;
+      // 全新安装没有这个历史包袱,保持默认 100%
+      if (HAD_SAVED_CONFIG) CONFIG.minAccuracy = 0.9;
       saveConfig(CONFIG);
       if (typeof GM_setValue !== 'undefined') GM_setValue(MIG, true);
       else localStorage.setItem(MIG, '1');
@@ -133,54 +129,22 @@
   } catch (e) { /* ignore */ }
   if (CONFIG.speed > 2) { CONFIG.speed = 2; }  // 倍速上限 2x
 
-  /* 一次性迁移(v1.6.0):面板精简,以下项改为固定值(不再提供开关)
-     - 图片题看原图固定开、跳章固定开、自动提交固定开(填充率 100%)
-     - 准确率检测 + 有错题就修固定开,阈值默认 100%
-     - 不故意答错、状态上报关闭 */
+  /* 一次性迁移(v1.6.1):v1.6.0 面板精简掉的控件,其配置键现在也一并从代码里移除。
+     行为已固定:看原图、卡住跳章、填充率 100% 才提交、有错题就修、不故意答错、不上报状态。
+     这里清掉老版本存档里的残留键,免得旧值继续被存盘 */
   try {
-    const MIG = 'cxMigV160';
+    const MIG = 'cxMigV161';
     const done = (typeof GM_getValue !== 'undefined') ? GM_getValue(MIG, false) : localStorage.getItem(MIG);
     if (!done) {
-      CONFIG.aiVision = true;
-      CONFIG.skipStuckChapter = true;
-      CONFIG.autoSubmit = true;
-      CONFIG.accCheckEnabled = true;
-      CONFIG.accFixAllWrong = true;
-      CONFIG.minAccuracy = 1;
-      CONFIG.deliberateErrorRate = 0;
-      CONFIG.reportUrl = '';
+      ['aiVision', 'skipStuckChapter', 'autoSubmit', 'accCheckEnabled', 'accFixAllWrong',
+       'deliberateErrorRate', 'reportUrl'].forEach((k) => { delete CONFIG[k]; });
+      // 注意:准确率阈值是面板保留的可调项,迁移不能覆盖用户设定,只清残留键
       saveConfig(CONFIG);
       if (typeof GM_setValue !== 'undefined') GM_setValue(MIG, true);
       else localStorage.setItem(MIG, '1');
     }
   } catch (e) { /* ignore */ }
 
-  /* 题目收集器:做过的题(题干+选项+答案)自动积累,导出后交给 AI 整理成考前手册 */
-  let COLLECTED = [];
-  try {
-    COLLECTED = (typeof GM_getValue !== 'undefined')
-      ? GM_getValue('cxQuestions', [])
-      : JSON.parse(localStorage.getItem('cxQuestions') || '[]');
-    if (!Array.isArray(COLLECTED)) COLLECTED = [];
-  } catch (e) { COLLECTED = []; }
-  function recordQuestion(q, answer) {
-    try {
-      COLLECTED.push({ q: q.question, t: String(q.type), o: (q.options || []).join('§'), a: (answer || []).join('|') });
-      if (COLLECTED.length > 5000) COLLECTED = COLLECTED.slice(-5000);
-      if (typeof GM_setValue !== 'undefined') GM_setValue('cxQuestions', COLLECTED);
-      else localStorage.setItem('cxQuestions', JSON.stringify(COLLECTED));
-    } catch (e) { /* ignore */ }
-  }
-  function exportQuestions() {
-    if (!COLLECTED.length) { log('📋 还没有收集到题目(做完学习检测/弹题后自动收集)', 'warn'); return; }
-    const data = JSON.stringify(COLLECTED);
-    const done = () => log(`📋 已导出 ${COLLECTED.length} 道题,全选复制发给 AI 助手`, 'ok');
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(data).then(done).catch(() => { showExportBox(data); });
-      } else showExportBox(data);
-    } catch (e) { showExportBox(data); }
-  }
   function showExportBox(data) {
     const ta = document.createElement('textarea');
     ta.value = data;
@@ -188,7 +152,7 @@
     document.body.appendChild(ta);
     ta.focus(); ta.select();
     ta.addEventListener('blur', () => { try { ta.remove(); } catch (e) {} });
-    log('📋 题目数据已生成在左下角文本框,全选(Ctrl+A)复制后发给 AI 助手', 'ok');
+    log('📋 数据已生成在左下角文本框,全选(Ctrl+A)复制即可', 'ok');
   }
 
   /* ==================== 错题本 ==================== */
@@ -570,7 +534,6 @@
     if (!q) return [];
     if (Array.isArray(q.images)) return q.images;
     q.images = [];
-    if (CONFIG.aiVision === false) return q.images;      // 用户关了「图片题看原图」
     const total = markQuestionImages(q);
     if (!total) return q.images;
     const list = (q.imgSrc || []).slice(0, IMG_MAX_COUNT);
@@ -627,113 +590,11 @@
       if (logLines.length > 60) logLines.shift();
       renderLogs();
     }
-    scheduleReport();
   }
 
-  // ===== 本地状态上报(可选:填了「上报地址」才生效,把页面真实状态推给本机监听程序)=====
-  let lastReportAt = 0;
-  let reportTimer = null;
   function scriptVersion() {
     try { if (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) return GM_info.script.version; } catch (e) { /* ignore */ }
     return 'unknown';
-  }
-  function buildSnapshot() {
-    const v = document.querySelector('video');
-    const jobs = Array.from(document.querySelectorAll('.ans-job-icon'));
-    const statusEl = document.getElementById('cxStatus');
-    return {
-      at: Date.now(),
-      time: new Date().toLocaleString('zh-CN'),
-      version: scriptVersion(),
-      url: location.href,
-      title: document.title,
-      status: statusEl ? statusEl.textContent : '',
-      config: {
-        speed: CONFIG.speed, webAiEnabled: CONFIG.webAiEnabled, webAiUrl: CONFIG.webAiUrl,
-        useTiku: CONFIG.useTiku, stopAtTime: CONFIG.stopAtTime,
-        autoSubmit: CONFIG.autoSubmit, autoJump: CONFIG.autoJump,
-        accCheckEnabled: CONFIG.accCheckEnabled,
-        minAccuracy: CONFIG.minAccuracy, deliberateErrorRate: CONFIG.deliberateErrorRate,
-        answerIntervalMin: CONFIG.answerIntervalMin, submitDelayMin: CONFIG.submitDelayMin
-      },
-      submitFails: SUBMIT_FAILS.slice(-20).map((it) => ({ chapter: it.chapter, node: it.node, reason: it.reason })),
-      video: v ? {
-        cur: Math.round(v.currentTime), dur: Math.round(v.duration) || null,
-        rate: v.playbackRate, paused: v.paused, muted: v.muted
-      } : null,
-      jobsOld: jobs.length ? {
-        total: jobs.length,
-        finished: jobs.filter((e) => e.classList.contains('ans-job-finished')).length
-      } : null,
-      cards: document.querySelectorAll('mooc-ans, .knowledge-card').length,
-      frames: Array.from(document.querySelectorAll('iframe')).map((f) => (f.src || '').slice(0, 120)).slice(0, 12),
-      quiz: {
-        TiMu: document.querySelectorAll('.TiMu').length,
-        questionLi: document.querySelectorAll('.questionLi').length,
-        fontEnc: document.querySelectorAll('.font-cxsecret').length,
-        checked: document.querySelectorAll('input[type=radio]:checked, input[type=checkbox]:checked').length
-      },
-      logs: logLines.slice(-25).map((l) => l.line),
-      diag: (function () {
-        try {
-          const li = document.querySelector('.questionLi') || document.querySelector('.TiMu');
-          if (!li) return null;
-          const ti = li.querySelector('input[name^=answertype]');
-          const ue = (typeof window.UE !== 'undefined') ? window.UE : null;
-          const keys = (ue && ue.instants) ? Object.keys(ue.instants) : null;
-          let ueLen = null;
-          try {
-            if (keys && keys.length) {
-              const ed = ue.instants[keys[0]];
-              if (ed && typeof ed.getContent === 'function') ueLen = String(ed.getContent()).replace(/<[^>]*>/g, '').length;
-            }
-          } catch (e) { /* ignore */ }
-          return {
-            answertype: ti ? ti.value : null,
-            textareas: Array.from(li.querySelectorAll('textarea')).map((t) => ({
-              id: t.id || null, name: t.name || null,
-              hidden: (t.offsetParent === null), cls: (t.className || '').slice(0, 40)
-            })),
-            iframes: Array.from(li.querySelectorAll('iframe')).map((f) => ({
-              id: f.id || null, cls: (f.className || '').slice(0, 40),
-              sameOrigin: (function () { try { return !!f.contentDocument; } catch (e) { return false; } })()
-            })),
-            editables: li.querySelectorAll('[contenteditable="true"]').length,
-            hasUE: !!ue,
-            ueInstants: keys,
-            ueContentLen: ueLen,
-            optionInputs: li.querySelectorAll('input[type=radio], input[type=checkbox]').length
-          };
-        } catch (e) { return { error: String(e && e.message) }; }
-      })()
-    };
-  }
-  function pushReport(force) {
-    const url = (CONFIG.reportUrl || '').trim();
-    if (!url) return;
-    const now = Date.now();
-    if (!force && now - lastReportAt < 4000) return;   // 限流:最快 4 秒一次
-    lastReportAt = now;
-    try {
-      GM_xmlhttpRequest({
-        method: 'POST',
-        url: url,
-        data: JSON.stringify(buildSnapshot()),
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 4000,
-        onerror: () => {},
-        ontimeout: () => {}
-      });
-    } catch (e) { /* 上报是可选能力,失败静默 */ }
-  }
-  function scheduleReport() {
-    if (reportTimer) return;
-    reportTimer = setTimeout(() => { reportTimer = null; pushReport(true); }, 800);
-  }
-  function startReporterHeartbeat() {
-    if (!(CONFIG.reportUrl || '').trim()) return;
-    pushReport(true);
-    setInterval(() => pushReport(false), 10000);
   }
 
   function initPanel() {
@@ -1034,10 +895,7 @@
       if (CONFIG.speed > 2) CONFIG.speed = 2;
       CONFIG.webAiEnabled = document.getElementById('cfgWebAI').checked;
       CONFIG.webAiBatch = document.getElementById('cfgWebAiBatch').checked;
-      CONFIG.aiVision = true;   // 图片题看原图:已固定开启
       CONFIG.webAiUrl = document.getElementById('cfgWebAiUrl').value.trim() || 'https://chat.deepseek.com/';
-      CONFIG.deliberateErrorRate = 0;   // 不故意答错:已固定
-      CONFIG.autoSubmit = true;         // 自动提交测验(填充率固定 100%):已固定
       // 进入页面是否自动开始(下次进入页面生效,不打断当前这一轮)
       {
         const asEl = document.getElementById('cfgAutoStart');
@@ -1049,8 +907,6 @@
             : '🚀 已关闭「进入页面自动开始」:下次进页面会停在暂停状态,点 ▶ 才开始', 'ok');
         }
       }
-      // 卡住的章节是否自动跳过(默认开:否则平台风控卡住一个节点,整门课就停在这一章)
-      CONFIG.skipStuckChapter = true;   // 卡住就跳下一章:已固定开启
       // 定时关闭:HH:MM,填空 = 不关闭;格式非法则回滚到旧值并提示
       {
         const stopEl = document.getElementById('cfgStopAt');
@@ -1068,8 +924,6 @@
       }
       // 填充率固定 100%(面板输入框只读),这里不需要读取
       // 提交后准确率检测
-      CONFIG.accCheckEnabled = true;   // 提交后检测准确率:已固定开启
-      CONFIG.accFixAllWrong = true;    // 有错题就修:已固定开启
       {
         const redoEl = document.getElementById('cfgAccRedoMax');
         let rd = parseInt(redoEl && redoEl.value, 10);
@@ -1085,7 +939,6 @@
         if (minEl) minEl.value = pct;
       }
       CONFIG.autoJump = document.getElementById('cfgJump').checked;
-      CONFIG.reportUrl = '';   // 状态上报功能已移除
       saveConfig(CONFIG);
       applyStopClock();   // 定时关闭改动立即生效(不用刷新页面)
       log('配置已保存(倍速 ' + CONFIG.speed + 'x, 网页AI ' + (CONFIG.webAiEnabled ? '开' : '关') +
@@ -2589,9 +2442,6 @@
   }
   function fillJudgeAnswer(answerArr, q, el) {
     let want = judgeDesiredSide(answerArr, q.options || []);
-    if (CONFIG.deliberateErrorRate > 0 && Math.random() < CONFIG.deliberateErrorRate) {
-      if (want !== null) { want = !want; log('🎭 拟人模式:本题故意答错(配置概率)', 'info'); }
-    }
     clearCurrent(el);
     if (want === null) {
       log(`⚠ 判断题:答案「${(answerArr || []).join('/') || '空'}」无法识别对错` + judgeDiag(el), 'warn');
@@ -2655,15 +2505,6 @@
       case '1': {
         let idx = matchAnswer(answerArr, q.options);
         if (!idx.length) return false;
-        // 拟人:单选题按配置概率故意点错(多选不故意错)
-        if (String(q.type) === '0' && CONFIG.deliberateErrorRate > 0 && Math.random() < CONFIG.deliberateErrorRate && q.options && q.options.length > 1) {
-          const wrongIdx = [];
-          for (let i = 0; i < q.options.length; i++) if (!idx.includes(i)) wrongIdx.push(i);
-          if (wrongIdx.length) {
-            idx = [wrongIdx[Math.floor(Math.random() * wrongIdx.length)]];
-            log('🎭 拟人模式:本题故意答错(配置概率)', 'info');
-          }
-        }
         clearCurrent(el);
         const lis = choiceBoxes(el);
         if (lis.length) {
@@ -2983,15 +2824,6 @@
       }
       let idx = matchAnswer(answerArr, q.options || []);
       if (!idx.length) return false;
-      // 拟人:单选按配置概率故意点一个错误选项
-      if (CONFIG.deliberateErrorRate > 0 && Math.random() < CONFIG.deliberateErrorRate && (q.options || []).length > 1) {
-        const wrongIdx = [];
-        for (let i = 0; i < q.options.length; i++) if (!idx.includes(i)) wrongIdx.push(i);
-        if (wrongIdx.length) {
-          idx = [wrongIdx[Math.floor(Math.random() * wrongIdx.length)]];
-          log('🎭 拟人模式:本题故意答错(配置概率)', 'info');
-        }
-      }
       const boxes = choiceBoxes(el);
       const lis = boxes.length ? boxes : Array.from(el.querySelectorAll('li'));
       if (!lis.length) return false;
@@ -3044,7 +2876,6 @@
       await sleep(0.2); // 极速:不等待
       const answers = await getAnswers(q);
       const ok = setHeuristicAnswer(answers, q, container);
-      recordQuestion(q, answers);  // 收集弹题进题库
       log(ok ? '弹题已作答,继续播放' : '弹题未能作答,尝试直接继续', ok ? 'ok' : 'warn');
       await sleep(0.3); // 极速:答完立即继续
       // 精确优先:先点"继续学习"(视频弹题专用),再兜底其他常见按钮
@@ -3065,15 +2896,22 @@
     let player = null;
     try { player = win.videojs('video_html5_api'); } catch (e) { /* ignore */ }
     if (!player) { log('无法获取播放器对象,跳过', 'err'); return; }
+    // 倍速钳到超星支持的 1~2x:超出范围播放器会把 rate 改写回来,
+    // 与下面的校正逻辑互相拉扯,表现为"面板设了 3x 实际按 1x 播"
+    const wantRate = () => {
+      const v = Number(CONFIG.speed);
+      if (!isFinite(v) || v <= 0) return 1;
+      return Math.min(2, Math.max(1, v));
+    };
     try { player.muted(true); } catch (e) { /* ignore */ }
-    try { player.playbackRate(CONFIG.speed); } catch (e) { /* ignore */ }
+    try { player.playbackRate(wantRate()); } catch (e) { /* ignore */ }
     // 兜底:播放器自身触发 ratechange(内置倍速菜单/平台脚本改写)时立刻改回设定值
     try {
       let lastFix = 0;
       player.on('ratechange', () => {
         const t = Date.now();
         if (t - lastFix < 300) return;   // 节流:防止播放器不接受该 rate 时来回抖动
-        const want = Number(CONFIG.speed) || 1;
+        const want = wantRate();
         let now = 1;
         try { now = Number(player.playbackRate()) || 1; } catch (e) { now = 1; }
         if (Math.abs(now - want) > 0.05) {
@@ -3083,7 +2921,7 @@
       });
     } catch (e) { /* ignore */ }
     try { player.play(); } catch (e) { /* ignore */ }
-    log(`▶ 开始播放视频(静音, ${CONFIG.speed}x)`, 'ok');
+    log(`▶ 开始播放视频(静音, ${wantRate()}x)`, 'ok');
     await new Promise((resolve) => {
       let finished = false;
       let timer = null;
@@ -3092,8 +2930,19 @@
       // 否则老轮次会一直空转,新页面永远等不到它结束
       let lastCur = -1;
       let lastProgressAt = Date.now();
+      // 只比 origin+pathname:平台播放中给 iframe 补 ?t=/hash 不算换页。
+      // 用整串 href 比会把正在播的视频误判成「页面已切走」提前结束,
+      // 外层复检又发现没做完,两次尝试后就被打上"跳过"标记 —— 表现为视频刷一半就跳走
+      const urlKey = (u) => {
+        try { const x = new URL(String(u)); return x.origin + x.pathname; } catch (e) { return ''; }
+      };
+      const startKey = urlKey(startHref);
       const frameAlive = () => {
-        try { return iframe.isConnected && (!startHref || win.location.href === startHref); } catch (e) { return false; }
+        try {
+          if (!iframe.isConnected) return false;
+          if (!startKey) return true;
+          return urlKey(win.location.href) === startKey;
+        } catch (e) { return false; }
       };
       const finish = () => {
         if (finished) return;
@@ -3117,7 +2966,10 @@
             return;
           }
           const cur = (function () { try { return player.currentTime() || 0; } catch (e) { return 0; } })();
+          const pausedNow = (function () { try { return player.paused(); } catch (e) { return true; } })();
           if (cur > lastCur + 0.01) { lastCur = cur; lastProgressAt = Date.now(); }
+          // 暂停中(多半在处理弹题或等缓冲)不算"卡死",否则 AI 答题慢一点就会把视频判死
+          else if (pausedNow) lastProgressAt = Date.now();
           if (Date.now() - lastProgressAt > 180000) {
             log('⚠ 视频 3 分钟没有进度,结束本任务点(避免卡死;可刷新页面重试)', 'warn');
             finish();
@@ -3126,7 +2978,7 @@
           // 倍速校正:超星播放器自带倍速菜单,弹题/重播/换任务点后会把 rate 重置回 1x,
           // 出现"面板设了 2x 却按原速播"。每轮比对一次,不一致立即写回(容差 0.05)
           try {
-            const want = Number(CONFIG.speed) || 1;
+            const want = wantRate();
             const now = Number(player.playbackRate()) || 1;
             if (Math.abs(now - want) > 0.05) player.playbackRate(want);
             // 再兜一层:平台脚本可能绕过 videojs 直接改 <video>.playbackRate
@@ -3388,21 +3240,15 @@
         ok = setQuizAnswer(answers, q, el, win);
         if (!ok) fail = `答案「${answers.join('/')}」未匹配到选项(识别出 ${q.options ? q.options.length : 0} 个选项)`;
       }
-      recordQuestion(q, answers);  // 收集测验题进题库
       if (ok) okCount++;
       STATS.jobsDone = okCount;
       log(`第 ${i + 1}/${tasks.length} 题(类型 ${q.type}) ${ok ? '✓ 已作答' : '✗ ' + fail}`, ok ? 'ok' : 'warn');
     }
-    if (pausedMid) { log('⏸ 暂停中断:本题库不自动提交,已答内容保留在页面上', 'warn'); return; }
+    if (pausedMid) { log('⏸ 暂停中断:本题库未提交,已答内容保留在页面上', 'warn'); return; }
     // 填充率 = 成功填上答案的题数 / 总题数(不是准确率:对错要等平台判分才知道)
     // 固定要求 100%:只要有一题没填上答案就不交卷,避免交半张卷被判错
     const fillPct = tasks.length ? Math.round((okCount / tasks.length) * 100) : 0;
     const missing = tasks.length - okCount;
-    if (!CONFIG.autoSubmit) {
-      log(`填充率 ${fillPct}%(${okCount}/${tasks.length}),自动提交已关闭,暂存不提交`, 'warn');
-      try { win.alert = () => {}; if (typeof win.noSubmit === 'function') win.noSubmit(); } catch (e) { /* ignore */ }
-      return;
-    }
     if (missing > 0) {
       const reason = `填充率 ${fillPct}%(还有 ${missing}/${tasks.length} 题没填上答案)`;
       log(`⛔ ${reason},按规则不提交(填充率必须 100%)`, 'warn');
@@ -3418,7 +3264,7 @@
     } else if (replied < tasks.length) {
       log(`🔍 提交前回读:${replied}/${tasks.length} 题确实已填入作答,补答 ${tasks.length - replied} 题...`, 'warn');
       for (const t of tasks) {
-        if (runAborted()) { log('⏸ 已暂停,本题库不自动提交', 'warn'); return; }
+        if (runAborted()) { log('⏸ 已暂停,本题库未提交', 'warn'); return; }
         if (isAnsweredEl(t.el)) continue;
         let ans = [];
         try { ans = await getAnswers(t.q); } catch (e) { ans = []; }
@@ -3864,9 +3710,7 @@
   //   · 没有错题 = 全对 → 直接进下一个节点
   //   · 有错题   → 只把判错的题单独重问(其余题不动),写入错题本后点「重做」
   async function afterSubmitAccuracy(wins, ctx) {
-    if (!CONFIG.accCheckEnabled) return;
-    const needPct = Math.round((CONFIG.minAccuracy || 0.9) * 100);
-    const fixAllWrong = CONFIG.accFixAllWrong !== false;            // 默认:只要有错题就修,不看整体准确率
+    const needPct = Math.round((CONFIG.minAccuracy || 1) * 100);
     const redoMax = Math.max(1, Math.min(5, CONFIG.accRedoMax || 2)); // 同一节点最多自动重做几次
     const node = (ctx && ctx.node) || curNodeName || '当前节点';
     const nodeKey = curChapterName + '#' + node;
@@ -3917,9 +3761,8 @@
     const wrongCnt = res.wrong > 0 ? res.wrong : 0;
     const detailKnown = res.wrong >= 0;
     log('📊 提交后准确率 ' + res.pct + '%(依据:' + res.basis + (detailKnown ? ';错题 ' + wrongCnt + ' 道' : '') + '),阈值 ' + needPct + '%', res.pct >= needPct ? 'ok' : 'warn');
-    // ② 有错题:开启「有错必修」就修(不管整体准确率),否则按阈值判;
-    //    只读到总百分比时(不知错题明细)只能按阈值判
-    const needFix = (detailKnown && wrongCnt > 0) ? (fixAllWrong ? true : res.pct < needPct) : res.pct < needPct;
+    // ② 有错题就修(已固定):只读到总百分比时(不知错题明细)只能按阈值判
+    const needFix = (detailKnown && wrongCnt > 0) ? true : res.pct < needPct;
     if (!needFix) { log('🎯 准确率达标,进入下一个节点', 'ok'); return; }
     const wrongs = collectWrongQuestions(wins);
     // 没有「重做」按钮但有错题:先看关掉弹窗后题目是否已经解锁(可改可交),
@@ -4457,13 +4300,13 @@
         else if (src) reason = '未知任务类型未完成: ' + src.slice(-60);
         recordSubmitFail({ chapter: curChapterName, node: n || '未知任务点', reason });
       }
-      // 默认继续往下走:卡住的节点已经记进「未提交」清单,再停在这一章只会让整门课一动不动
-      if (CONFIG.skipStuckChapter !== false && CONFIG.autoJump) {
-        log('⏭ 按「做不掉就跳下一章」跳过本章,继续下一章(卡住的节点见面板「未提交」栏)', 'warn');
+      // 卡住的节点已经记进「未提交」清单,不停在这一章(否则整门课一动不动)
+      if (CONFIG.autoJump) {
+        log('⏭ 本章仍有任务点未完成,已记入面板「未提交」栏,继续下一章', 'warn');
         await switchNextChapter('下一章');
         return;
       }
-      log('⛔ 已按设置停在本章(「做不掉就跳下一章」已关闭)', 'warn');
+      log('⛔ 自动切章已关闭,停在本章(未完成的节点见「未提交」栏)', 'warn');
       return;
     }
     log(`本章扫描结束(共 ${total} 个任务点)`, 'ok');
@@ -5042,8 +4885,6 @@
 
   /* ==================== 启动:按适配器分发 ==================== */
   function bootAdapter() {
-    startReporterHeartbeat();
-
     for (const a of ADAPTERS) {
       let hit = false;
       try { hit = a.match(); } catch (e) { hit = false; }

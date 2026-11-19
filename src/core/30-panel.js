@@ -39,113 +39,11 @@
       if (logLines.length > 60) logLines.shift();
       renderLogs();
     }
-    scheduleReport();
   }
 
-  // ===== 本地状态上报(可选:填了「上报地址」才生效,把页面真实状态推给本机监听程序)=====
-  let lastReportAt = 0;
-  let reportTimer = null;
   function scriptVersion() {
     try { if (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) return GM_info.script.version; } catch (e) { /* ignore */ }
     return 'unknown';
-  }
-  function buildSnapshot() {
-    const v = document.querySelector('video');
-    const jobs = Array.from(document.querySelectorAll('.ans-job-icon'));
-    const statusEl = document.getElementById('cxStatus');
-    return {
-      at: Date.now(),
-      time: new Date().toLocaleString('zh-CN'),
-      version: scriptVersion(),
-      url: location.href,
-      title: document.title,
-      status: statusEl ? statusEl.textContent : '',
-      config: {
-        speed: CONFIG.speed, webAiEnabled: CONFIG.webAiEnabled, webAiUrl: CONFIG.webAiUrl,
-        useTiku: CONFIG.useTiku, stopAtTime: CONFIG.stopAtTime,
-        autoSubmit: CONFIG.autoSubmit, autoJump: CONFIG.autoJump,
-        accCheckEnabled: CONFIG.accCheckEnabled,
-        minAccuracy: CONFIG.minAccuracy, deliberateErrorRate: CONFIG.deliberateErrorRate,
-        answerIntervalMin: CONFIG.answerIntervalMin, submitDelayMin: CONFIG.submitDelayMin
-      },
-      submitFails: SUBMIT_FAILS.slice(-20).map((it) => ({ chapter: it.chapter, node: it.node, reason: it.reason })),
-      video: v ? {
-        cur: Math.round(v.currentTime), dur: Math.round(v.duration) || null,
-        rate: v.playbackRate, paused: v.paused, muted: v.muted
-      } : null,
-      jobsOld: jobs.length ? {
-        total: jobs.length,
-        finished: jobs.filter((e) => e.classList.contains('ans-job-finished')).length
-      } : null,
-      cards: document.querySelectorAll('mooc-ans, .knowledge-card').length,
-      frames: Array.from(document.querySelectorAll('iframe')).map((f) => (f.src || '').slice(0, 120)).slice(0, 12),
-      quiz: {
-        TiMu: document.querySelectorAll('.TiMu').length,
-        questionLi: document.querySelectorAll('.questionLi').length,
-        fontEnc: document.querySelectorAll('.font-cxsecret').length,
-        checked: document.querySelectorAll('input[type=radio]:checked, input[type=checkbox]:checked').length
-      },
-      logs: logLines.slice(-25).map((l) => l.line),
-      diag: (function () {
-        try {
-          const li = document.querySelector('.questionLi') || document.querySelector('.TiMu');
-          if (!li) return null;
-          const ti = li.querySelector('input[name^=answertype]');
-          const ue = (typeof window.UE !== 'undefined') ? window.UE : null;
-          const keys = (ue && ue.instants) ? Object.keys(ue.instants) : null;
-          let ueLen = null;
-          try {
-            if (keys && keys.length) {
-              const ed = ue.instants[keys[0]];
-              if (ed && typeof ed.getContent === 'function') ueLen = String(ed.getContent()).replace(/<[^>]*>/g, '').length;
-            }
-          } catch (e) { /* ignore */ }
-          return {
-            answertype: ti ? ti.value : null,
-            textareas: Array.from(li.querySelectorAll('textarea')).map((t) => ({
-              id: t.id || null, name: t.name || null,
-              hidden: (t.offsetParent === null), cls: (t.className || '').slice(0, 40)
-            })),
-            iframes: Array.from(li.querySelectorAll('iframe')).map((f) => ({
-              id: f.id || null, cls: (f.className || '').slice(0, 40),
-              sameOrigin: (function () { try { return !!f.contentDocument; } catch (e) { return false; } })()
-            })),
-            editables: li.querySelectorAll('[contenteditable="true"]').length,
-            hasUE: !!ue,
-            ueInstants: keys,
-            ueContentLen: ueLen,
-            optionInputs: li.querySelectorAll('input[type=radio], input[type=checkbox]').length
-          };
-        } catch (e) { return { error: String(e && e.message) }; }
-      })()
-    };
-  }
-  function pushReport(force) {
-    const url = (CONFIG.reportUrl || '').trim();
-    if (!url) return;
-    const now = Date.now();
-    if (!force && now - lastReportAt < 4000) return;   // 限流:最快 4 秒一次
-    lastReportAt = now;
-    try {
-      GM_xmlhttpRequest({
-        method: 'POST',
-        url: url,
-        data: JSON.stringify(buildSnapshot()),
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 4000,
-        onerror: () => {},
-        ontimeout: () => {}
-      });
-    } catch (e) { /* 上报是可选能力,失败静默 */ }
-  }
-  function scheduleReport() {
-    if (reportTimer) return;
-    reportTimer = setTimeout(() => { reportTimer = null; pushReport(true); }, 800);
-  }
-  function startReporterHeartbeat() {
-    if (!(CONFIG.reportUrl || '').trim()) return;
-    pushReport(true);
-    setInterval(() => pushReport(false), 10000);
   }
 
   function initPanel() {
@@ -446,10 +344,7 @@
       if (CONFIG.speed > 2) CONFIG.speed = 2;
       CONFIG.webAiEnabled = document.getElementById('cfgWebAI').checked;
       CONFIG.webAiBatch = document.getElementById('cfgWebAiBatch').checked;
-      CONFIG.aiVision = true;   // 图片题看原图:已固定开启
       CONFIG.webAiUrl = document.getElementById('cfgWebAiUrl').value.trim() || 'https://chat.deepseek.com/';
-      CONFIG.deliberateErrorRate = 0;   // 不故意答错:已固定
-      CONFIG.autoSubmit = true;         // 自动提交测验(填充率固定 100%):已固定
       // 进入页面是否自动开始(下次进入页面生效,不打断当前这一轮)
       {
         const asEl = document.getElementById('cfgAutoStart');
@@ -461,8 +356,6 @@
             : '🚀 已关闭「进入页面自动开始」:下次进页面会停在暂停状态,点 ▶ 才开始', 'ok');
         }
       }
-      // 卡住的章节是否自动跳过(默认开:否则平台风控卡住一个节点,整门课就停在这一章)
-      CONFIG.skipStuckChapter = true;   // 卡住就跳下一章:已固定开启
       // 定时关闭:HH:MM,填空 = 不关闭;格式非法则回滚到旧值并提示
       {
         const stopEl = document.getElementById('cfgStopAt');
@@ -480,8 +373,6 @@
       }
       // 填充率固定 100%(面板输入框只读),这里不需要读取
       // 提交后准确率检测
-      CONFIG.accCheckEnabled = true;   // 提交后检测准确率:已固定开启
-      CONFIG.accFixAllWrong = true;    // 有错题就修:已固定开启
       {
         const redoEl = document.getElementById('cfgAccRedoMax');
         let rd = parseInt(redoEl && redoEl.value, 10);
@@ -497,7 +388,6 @@
         if (minEl) minEl.value = pct;
       }
       CONFIG.autoJump = document.getElementById('cfgJump').checked;
-      CONFIG.reportUrl = '';   // 状态上报功能已移除
       saveConfig(CONFIG);
       applyStopClock();   // 定时关闭改动立即生效(不用刷新页面)
       log('配置已保存(倍速 ' + CONFIG.speed + 'x, 网页AI ' + (CONFIG.webAiEnabled ? '开' : '关') +

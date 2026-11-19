@@ -90,8 +90,6 @@
 
   /* ==================== 启动:按适配器分发 ==================== */
   function bootAdapter() {
-    startReporterHeartbeat();
-
     for (const a of ADAPTERS) {
       let hit = false;
       try { hit = a.match(); } catch (e) { hit = false; }

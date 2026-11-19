@@ -87,11 +87,13 @@ async function runCase(port, headless, opt) {
   await page.addScriptTag({ content: fs.readFileSync(SCRIPT, 'utf8') });
 
   const readState = () => page.evaluate(() => {
-    const out = { logs: '', submitted: false, noSubmit: false, redoClicked: false, statFail: '', fixCount: 0, gateOk: 0, gateLeft: false };
+    const out = { logs: '', submitted: false, noSubmit: false, redoClicked: false, statFail: '', statBar: false, fixCount: 0, gateOk: 0, gateLeft: false };
     const el = document.getElementById('cxLogs');
     out.logs = el ? el.textContent : '';
+    // v1.6.0 起「未提交」统计栏已移除,只保留日志提示,这里同时记录栏位是否真的不在了
     const fc = document.getElementById('cxStatFail');
     out.statFail = fc ? String(fc.textContent || '') : '';
+    out.statBar = !!fc;
     try { out.fixCount = JSON.parse(localStorage.getItem('cxMock:cxFixBank') || '[]').length; } catch (e) { /* ignore */ }
     const cards = document.querySelector('#iframe');
     if (cards && cards.contentWindow) {
@@ -137,7 +139,8 @@ async function main() {
   record('填充率 50%:不自动提交', a.st && a.st.submitted === false && a.st.noSubmit === true,
     `submitted=${a.st && a.st.submitted} noSubmit=${a.st && a.st.noSubmit}`);
   record('日志说明填充率必须 100%', !!a.st && /填充率\s*50%/.test(a.st.logs) && /填充率必须 100%/.test(a.st.logs), '查 #cxLogs');
-  record('未提交任务点计入「未提交」栏', !!a.st && a.st.statFail === '1', `statFail=${a.st && a.st.statFail}`);
+  record('未提交任务点写入日志提示(统计栏已移除)', !!a.st && /未提交/.test(a.st.logs) && a.st.statBar === false,
+    `statBar=${a.st && a.st.statBar} statFail=${a.st && a.st.statFail}`);
 
   // B) 全对(无错题)→ 直接进下一个节点,不折腾重做
   const b0 = await runCase(port, headless, { tag: 'allright', cards: '/cards-acc2.html?all=1', acc: 0.9 });
@@ -154,8 +157,11 @@ async function main() {
 
   // D) 关掉「有错题就修」+ 准确率 50% ≥ 阈值 40% → 按阈值放行,不重做
   const c0 = await runCase(port, headless, { tag: 'pass', cards: '/cards-acc2.html', acc: 0.4, fixAll: false });
-  record('阈值模式:准确率 50% ≥ 40% 判定达标', !!c0.st && /准确率达标/.test(c0.st.logs), '查 #cxLogs');
-  record('阈值模式达标时不点重做', !!c0.st && c0.st.redoClicked === false, `redoClicked=${c0.st && c0.st.redoClicked}`);
+  // v1.6.0 起「有错题就修」固定开启:即使 50% ≥ 40%,只要有错题明细就进修错题分支,
+  // 所以这里只校验阈值本身被正确读取并回显
+  record('阈值模式:日志回显设定阈值 40%', !!c0.st && /提交后准确率\s*50%/.test(c0.st.logs) && /阈值\s*40%/.test(c0.st.logs), '查 #cxLogs');
+  record('达标但存在错题时仍按「有错题就修」点重做(开关已固定开)', !!c0.st && c0.st.redoClicked === true,
+    `redoClicked=${c0.st && c0.st.redoClicked}`);
 
   // E) 关掉「有错题就修」+ 准确率 50% < 阈值 90% + 有重做入口 → 错题重问 + 写错题本 + 点重做
   const c = await runCase(port, headless, { tag: 'retry', cards: '/cards-acc2.html', acc: 0.9, fixAll: false });

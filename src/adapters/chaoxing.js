@@ -611,9 +611,6 @@
   }
   function fillJudgeAnswer(answerArr, q, el) {
     let want = judgeDesiredSide(answerArr, q.options || []);
-    if (CONFIG.deliberateErrorRate > 0 && Math.random() < CONFIG.deliberateErrorRate) {
-      if (want !== null) { want = !want; log('🎭 拟人模式:本题故意答错(配置概率)', 'info'); }
-    }
     clearCurrent(el);
     if (want === null) {
       log(`⚠ 判断题:答案「${(answerArr || []).join('/') || '空'}」无法识别对错` + judgeDiag(el), 'warn');
@@ -677,15 +674,6 @@
       case '1': {
         let idx = matchAnswer(answerArr, q.options);
         if (!idx.length) return false;
-        // 拟人:单选题按配置概率故意点错(多选不故意错)
-        if (String(q.type) === '0' && CONFIG.deliberateErrorRate > 0 && Math.random() < CONFIG.deliberateErrorRate && q.options && q.options.length > 1) {
-          const wrongIdx = [];
-          for (let i = 0; i < q.options.length; i++) if (!idx.includes(i)) wrongIdx.push(i);
-          if (wrongIdx.length) {
-            idx = [wrongIdx[Math.floor(Math.random() * wrongIdx.length)]];
-            log('🎭 拟人模式:本题故意答错(配置概率)', 'info');
-          }
-        }
         clearCurrent(el);
         const lis = choiceBoxes(el);
         if (lis.length) {
@@ -1005,15 +993,6 @@
       }
       let idx = matchAnswer(answerArr, q.options || []);
       if (!idx.length) return false;
-      // 拟人:单选按配置概率故意点一个错误选项
-      if (CONFIG.deliberateErrorRate > 0 && Math.random() < CONFIG.deliberateErrorRate && (q.options || []).length > 1) {
-        const wrongIdx = [];
-        for (let i = 0; i < q.options.length; i++) if (!idx.includes(i)) wrongIdx.push(i);
-        if (wrongIdx.length) {
-          idx = [wrongIdx[Math.floor(Math.random() * wrongIdx.length)]];
-          log('🎭 拟人模式:本题故意答错(配置概率)', 'info');
-        }
-      }
       const boxes = choiceBoxes(el);
       const lis = boxes.length ? boxes : Array.from(el.querySelectorAll('li'));
       if (!lis.length) return false;
@@ -1066,7 +1045,6 @@
       await sleep(0.2); // 极速:不等待
       const answers = await getAnswers(q);
       const ok = setHeuristicAnswer(answers, q, container);
-      recordQuestion(q, answers);  // 收集弹题进题库
       log(ok ? '弹题已作答,继续播放' : '弹题未能作答,尝试直接继续', ok ? 'ok' : 'warn');
       await sleep(0.3); // 极速:答完立即继续
       // 精确优先:先点"继续学习"(视频弹题专用),再兜底其他常见按钮
@@ -1087,15 +1065,22 @@
     let player = null;
     try { player = win.videojs('video_html5_api'); } catch (e) { /* ignore */ }
     if (!player) { log('无法获取播放器对象,跳过', 'err'); return; }
+    // 倍速钳到超星支持的 1~2x:超出范围播放器会把 rate 改写回来,
+    // 与下面的校正逻辑互相拉扯,表现为"面板设了 3x 实际按 1x 播"
+    const wantRate = () => {
+      const v = Number(CONFIG.speed);
+      if (!isFinite(v) || v <= 0) return 1;
+      return Math.min(2, Math.max(1, v));
+    };
     try { player.muted(true); } catch (e) { /* ignore */ }
-    try { player.playbackRate(CONFIG.speed); } catch (e) { /* ignore */ }
+    try { player.playbackRate(wantRate()); } catch (e) { /* ignore */ }
     // 兜底:播放器自身触发 ratechange(内置倍速菜单/平台脚本改写)时立刻改回设定值
     try {
       let lastFix = 0;
       player.on('ratechange', () => {
         const t = Date.now();
         if (t - lastFix < 300) return;   // 节流:防止播放器不接受该 rate 时来回抖动
-        const want = Number(CONFIG.speed) || 1;
+        const want = wantRate();
         let now = 1;
         try { now = Number(player.playbackRate()) || 1; } catch (e) { now = 1; }
         if (Math.abs(now - want) > 0.05) {
@@ -1105,7 +1090,7 @@
       });
     } catch (e) { /* ignore */ }
     try { player.play(); } catch (e) { /* ignore */ }
-    log(`▶ 开始播放视频(静音, ${CONFIG.speed}x)`, 'ok');
+    log(`▶ 开始播放视频(静音, ${wantRate()}x)`, 'ok');
     await new Promise((resolve) => {
       let finished = false;
       let timer = null;
@@ -1114,8 +1099,19 @@
       // 否则老轮次会一直空转,新页面永远等不到它结束
       let lastCur = -1;
       let lastProgressAt = Date.now();
+      // 只比 origin+pathname:平台播放中给 iframe 补 ?t=/hash 不算换页。
+      // 用整串 href 比会把正在播的视频误判成「页面已切走」提前结束,
+      // 外层复检又发现没做完,两次尝试后就被打上"跳过"标记 —— 表现为视频刷一半就跳走
+      const urlKey = (u) => {
+        try { const x = new URL(String(u)); return x.origin + x.pathname; } catch (e) { return ''; }
+      };
+      const startKey = urlKey(startHref);
       const frameAlive = () => {
-        try { return iframe.isConnected && (!startHref || win.location.href === startHref); } catch (e) { return false; }
+        try {
+          if (!iframe.isConnected) return false;
+          if (!startKey) return true;
+          return urlKey(win.location.href) === startKey;
+        } catch (e) { return false; }
       };
       const finish = () => {
         if (finished) return;
@@ -1139,7 +1135,10 @@
             return;
           }
           const cur = (function () { try { return player.currentTime() || 0; } catch (e) { return 0; } })();
+          const pausedNow = (function () { try { return player.paused(); } catch (e) { return true; } })();
           if (cur > lastCur + 0.01) { lastCur = cur; lastProgressAt = Date.now(); }
+          // 暂停中(多半在处理弹题或等缓冲)不算"卡死",否则 AI 答题慢一点就会把视频判死
+          else if (pausedNow) lastProgressAt = Date.now();
           if (Date.now() - lastProgressAt > 180000) {
             log('⚠ 视频 3 分钟没有进度,结束本任务点(避免卡死;可刷新页面重试)', 'warn');
             finish();
@@ -1148,7 +1147,7 @@
           // 倍速校正:超星播放器自带倍速菜单,弹题/重播/换任务点后会把 rate 重置回 1x,
           // 出现"面板设了 2x 却按原速播"。每轮比对一次,不一致立即写回(容差 0.05)
           try {
-            const want = Number(CONFIG.speed) || 1;
+            const want = wantRate();
             const now = Number(player.playbackRate()) || 1;
             if (Math.abs(now - want) > 0.05) player.playbackRate(want);
             // 再兜一层:平台脚本可能绕过 videojs 直接改 <video>.playbackRate
@@ -1410,21 +1409,15 @@
         ok = setQuizAnswer(answers, q, el, win);
         if (!ok) fail = `答案「${answers.join('/')}」未匹配到选项(识别出 ${q.options ? q.options.length : 0} 个选项)`;
       }
-      recordQuestion(q, answers);  // 收集测验题进题库
       if (ok) okCount++;
       STATS.jobsDone = okCount;
       log(`第 ${i + 1}/${tasks.length} 题(类型 ${q.type}) ${ok ? '✓ 已作答' : '✗ ' + fail}`, ok ? 'ok' : 'warn');
     }
-    if (pausedMid) { log('⏸ 暂停中断:本题库不自动提交,已答内容保留在页面上', 'warn'); return; }
+    if (pausedMid) { log('⏸ 暂停中断:本题库未提交,已答内容保留在页面上', 'warn'); return; }
     // 填充率 = 成功填上答案的题数 / 总题数(不是准确率:对错要等平台判分才知道)
     // 固定要求 100%:只要有一题没填上答案就不交卷,避免交半张卷被判错
     const fillPct = tasks.length ? Math.round((okCount / tasks.length) * 100) : 0;
     const missing = tasks.length - okCount;
-    if (!CONFIG.autoSubmit) {
-      log(`填充率 ${fillPct}%(${okCount}/${tasks.length}),自动提交已关闭,暂存不提交`, 'warn');
-      try { win.alert = () => {}; if (typeof win.noSubmit === 'function') win.noSubmit(); } catch (e) { /* ignore */ }
-      return;
-    }
     if (missing > 0) {
       const reason = `填充率 ${fillPct}%(还有 ${missing}/${tasks.length} 题没填上答案)`;
       log(`⛔ ${reason},按规则不提交(填充率必须 100%)`, 'warn');
@@ -1440,7 +1433,7 @@
     } else if (replied < tasks.length) {
       log(`🔍 提交前回读:${replied}/${tasks.length} 题确实已填入作答,补答 ${tasks.length - replied} 题...`, 'warn');
       for (const t of tasks) {
-        if (runAborted()) { log('⏸ 已暂停,本题库不自动提交', 'warn'); return; }
+        if (runAborted()) { log('⏸ 已暂停,本题库未提交', 'warn'); return; }
         if (isAnsweredEl(t.el)) continue;
         let ans = [];
         try { ans = await getAnswers(t.q); } catch (e) { ans = []; }
@@ -1886,9 +1879,7 @@
   //   · 没有错题 = 全对 → 直接进下一个节点
   //   · 有错题   → 只把判错的题单独重问(其余题不动),写入错题本后点「重做」
   async function afterSubmitAccuracy(wins, ctx) {
-    if (!CONFIG.accCheckEnabled) return;
-    const needPct = Math.round((CONFIG.minAccuracy || 0.9) * 100);
-    const fixAllWrong = CONFIG.accFixAllWrong !== false;            // 默认:只要有错题就修,不看整体准确率
+    const needPct = Math.round((CONFIG.minAccuracy || 1) * 100);
     const redoMax = Math.max(1, Math.min(5, CONFIG.accRedoMax || 2)); // 同一节点最多自动重做几次
     const node = (ctx && ctx.node) || curNodeName || '当前节点';
     const nodeKey = curChapterName + '#' + node;
@@ -1939,9 +1930,8 @@
     const wrongCnt = res.wrong > 0 ? res.wrong : 0;
     const detailKnown = res.wrong >= 0;
     log('📊 提交后准确率 ' + res.pct + '%(依据:' + res.basis + (detailKnown ? ';错题 ' + wrongCnt + ' 道' : '') + '),阈值 ' + needPct + '%', res.pct >= needPct ? 'ok' : 'warn');
-    // ② 有错题:开启「有错必修」就修(不管整体准确率),否则按阈值判;
-    //    只读到总百分比时(不知错题明细)只能按阈值判
-    const needFix = (detailKnown && wrongCnt > 0) ? (fixAllWrong ? true : res.pct < needPct) : res.pct < needPct;
+    // ② 有错题就修(已固定):只读到总百分比时(不知错题明细)只能按阈值判
+    const needFix = (detailKnown && wrongCnt > 0) ? true : res.pct < needPct;
     if (!needFix) { log('🎯 准确率达标,进入下一个节点', 'ok'); return; }
     const wrongs = collectWrongQuestions(wins);
     // 没有「重做」按钮但有错题:先看关掉弹窗后题目是否已经解锁(可改可交),
@@ -2479,13 +2469,13 @@
         else if (src) reason = '未知任务类型未完成: ' + src.slice(-60);
         recordSubmitFail({ chapter: curChapterName, node: n || '未知任务点', reason });
       }
-      // 默认继续往下走:卡住的节点已经记进「未提交」清单,再停在这一章只会让整门课一动不动
-      if (CONFIG.skipStuckChapter !== false && CONFIG.autoJump) {
-        log('⏭ 按「做不掉就跳下一章」跳过本章,继续下一章(卡住的节点见面板「未提交」栏)', 'warn');
+      // 卡住的节点已经记进「未提交」清单,不停在这一章(否则整门课一动不动)
+      if (CONFIG.autoJump) {
+        log('⏭ 本章仍有任务点未完成,已记入面板「未提交」栏,继续下一章', 'warn');
         await switchNextChapter('下一章');
         return;
       }
-      log('⛔ 已按设置停在本章(「做不掉就跳下一章」已关闭)', 'warn');
+      log('⛔ 自动切章已关闭,停在本章(未完成的节点见「未提交」栏)', 'warn');
       return;
     }
     log(`本章扫描结束(共 ${total} 个任务点)`, 'ok');
