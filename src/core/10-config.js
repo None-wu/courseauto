@@ -18,13 +18,9 @@
     accFixAllWrong: true,  // 只要有错题就去修(不看整体准确率);关掉则仅在低于 minAccuracy 时才修
     accRedoMax: 2,          // 同一节点最多自动重做几次(防死循环)
     deliberateErrorRate: 0, // 故意答错率 0~0.2(0=不故意错)
-    aiEnabled: false,      // 启用 DeepSeek AI 答题(需填 key)
-    aiKey: '',              // 个人 API Key:点面板 ⚙ 填写(platform.deepseek.com 创建,只存本机)
-    aiUrl: 'https://api.deepseek.com/v1/chat/completions',
-    aiModel: 'deepseek-reasoner',
     useTiku: false,         // 免费题库站(已停止免费,默认关闭,纯 AI 答题)
     reportUrl: '',          // 状态上报地址(调试用,留空=关闭);如 http://127.0.0.1:8790/report
-    webAiEnabled: false,    // 网页 AI 答题(免 API Key,需配合「网页AI桥」脚本)
+    webAiEnabled: false,    // 网页 AI 答题(免 Key,需配合「网页AI桥」脚本)
     webAiBatch: true,       // 整卷模式:整页题目一次性发给网页 AI,批量解析后逐题填写(更快、不易限流;缺漏的题自动回退逐题询问)
     webAiBatchRetry: true,  // 整卷缺题时再整批补问一次(关掉则直接逐题回退)
     webAiUrl: 'https://chat.deepseek.com/',  // 网页 AI 地址

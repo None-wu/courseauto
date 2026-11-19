@@ -39,8 +39,8 @@ async function main() {
   const url = `${base}/mycourse/studentstudy?mooc2=1&cards=/cards-direct.html`;
   console.log(`\n[mock] 测验直嵌结构: ${url}`);
 
-  // --webai:改用「网页 AI」通道(模拟对话页 /ai),验证你实际使用的那条链路
-  const webai = process.argv.includes('--webai');
+  // API 通道已移除:默认走「网页 AI」通道(模拟对话页 /ai),即实际使用的那条链路
+  const webai = true;
   const browser = await chromium.launch({
     headless: !process.argv.includes('--headed'),
     executablePath: findChrome() || undefined,
@@ -49,17 +49,19 @@ async function main() {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addInitScript({ content: await loadGmShimCode() });
   if (webai) {
-    await context.addInitScript(({ u }) => {
+    await context.addInitScript(({ u, relay }) => {
       try {
         const k = 'cxMock:cxConfig';
         const raw = localStorage.getItem(k);
         const cfg = raw ? JSON.parse(raw) : {};
         cfg.webAiEnabled = true;
         cfg.webAiUrl = u;
-        cfg.aiEnabled = false;
+        cfg.webAiRelay = relay;
+        cfg.webAiBatch = false;   // 本用例断言逐题作答,关掉整卷模式避免耗时抖动
         localStorage.setItem(k, JSON.stringify(cfg));
+        localStorage.setItem('cxRelay', relay);
       } catch (e) { /* ignore */ }
-    }, { u: `${base}/ai` });
+    }, { u: `${base}/ai`, relay: base });
     console.log('[mock] 通道切换:网页 AI(模拟对话页 ' + base + '/ai）');
   }
 
@@ -90,7 +92,7 @@ async function main() {
   }).catch(() => null);
 
   let st = null;
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < 180; i++) {
     st = await quizState();
     if (st && st.found && st.submitted) break;
     await page.waitForTimeout(500);

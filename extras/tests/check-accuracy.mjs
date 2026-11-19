@@ -49,6 +49,20 @@ async function runCase(port, headless, opt) {
   });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addInitScript({ content: await loadGmShimCode() });
+  // API 通道已移除:统一走「网页 AI」(模拟对话页 /ai + 本地中转)
+  await context.addInitScript(({ u, relay }) => {
+    try {
+      const k = 'cxMock:cxConfig';
+      const raw = localStorage.getItem(k);
+      const cfg = raw ? JSON.parse(raw) : {};
+      cfg.webAiEnabled = true;
+      cfg.webAiUrl = u;
+      cfg.webAiRelay = relay;
+      cfg.webAiBatch = false;
+      localStorage.setItem(k, JSON.stringify(cfg));
+      localStorage.setItem('cxRelay', relay);
+    } catch (e) { /* ignore */ }
+  }, { u: `${base}/ai`, relay: base });
   await context.addInitScript(({ acc, check, fixAll, redoMax }) => {
     try {
       // 预置迁移标记:否则脚本首启的 v1.5.0 迁移会把 minAccuracy 强制重置为 0.9,
@@ -96,10 +110,15 @@ async function runCase(port, headless, opt) {
   }).catch(() => null);
 
   let st = null;
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 200; i++) {
     st = await readState();
     if (st && STOP_MARKS.some((m) => st.logs.includes(m))) break;
     await page.waitForTimeout(500);
+  }
+  // 面板统计栏每秒刷新:终止日志命中后多等两拍,避免读到尚未更新的 statFail
+  if (st) {
+    await page.waitForTimeout(2200);
+    st = (await readState()) || st;
   }
   const tag = opt.tag;
   fs.writeFileSync(path.join(__dirname, 'out', `check-accuracy-${tag}.log`), st ? st.logs : '(no state)', 'utf8');

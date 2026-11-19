@@ -41,7 +41,8 @@ async function main() {
 
   const exe = findChrome();
   const headed = process.argv.includes('--headed');
-  const webai = process.argv.includes('--webai');
+  // API 通道已移除:默认就走「网页 AI」(模拟对话页 /ai),--webai 保留为兼容写法
+  const webai = true;
   const browser = await chromium.launch({
     headless: !headed,
     executablePath: exe || undefined,
@@ -61,7 +62,6 @@ async function main() {
         cfg.webAiEnabled = true;
         cfg.webAiUrl = u;
         cfg.webAiRelay = relay;
-        cfg.aiEnabled = false;
         localStorage.setItem(k, JSON.stringify(cfg));
         localStorage.setItem('cxRelay', relay);   // 桥脚本读这个:让它把心跳打到 mock 而不是 8790
       } catch (e) { /* ignore */ }

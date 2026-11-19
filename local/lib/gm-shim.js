@@ -46,10 +46,6 @@
       accCheckEnabled: true,
       stopAtTime: '',            // 定时关闭(HH:MM),空 = 不关闭
       deliberateErrorRate: 0,
-      aiEnabled: true,
-      aiKey: 'sk-mock-1234',
-      aiUrl: '/v1/chat/completions',      // 同源模拟接口
-      aiModel: 'mock-model',
       useTiku: false,
       reportUrl: '/report'                // 模拟上报接收端
     });

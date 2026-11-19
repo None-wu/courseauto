@@ -48,90 +48,6 @@
       return { form: '木课工具', answer: String(res.data || '').split('#') };
     } catch (e) { return { form: '木课工具', answer: [] }; }
   }
-  let aiFailCount = 0;
-  let aiCooldownUntil = 0;
-  let aiCooldownWarned = false;
-  // noImg:内部重试用。接口明确拒绝图片(400/413/415/422)时,去掉图片用纯文字再问一次
-  function channelAI(q, hint, noImg) {
-    return new Promise((resolve) => {
-      if (Date.now() < aiCooldownUntil) {
-        if (!aiCooldownWarned) {
-          aiCooldownWarned = true;
-          log('AI 通道冷却中(连续失败后暂停 10 分钟),请检查 ⚙ 里的 Key/平台/接口地址/模型', 'warn');
-        }
-        resolve({ form: 'AI(冷却中)', answer: [] });
-        return;
-      }
-      const prompt = hint ? buildAIPrompt(q) + `\n\n注意:${hint}` : buildAIPrompt(q);
-      // 图片题:OpenAI 兼容协议的多模态写法(纯文本 part + image_url part)。
-      // 老逻辑只发字符串,题干里的图片等于被扔掉,AI 只能靠 [图片N] 占位瞎猜。
-      const imgs = noImg ? [] : (q.images || []).filter(Boolean);
-      const userContent = imgs.length
-        ? [{ type: 'text', text: prompt + `\n\n本题的题目图片已作为附件放在这条消息里(共 ${imgs.length} 张),请直接看图作答。` }]
-          .concat(imgs.map((u) => ({ type: 'image_url', image_url: { url: u } })))
-        : prompt;
-      const data = JSON.stringify({
-        model: CONFIG.aiModel,
-        messages: [
-          { role: 'system', content: '你是答题助手。回复的第一个字符必须是最终答案,严禁输出思考过程、解释、重复题目或任何多余内容。' },
-          { role: 'user', content: userContent }
-        ],
-        temperature: 0.1,
-        max_tokens: 300
-      });
-      const done = (answer, errLog) => {
-        if (errLog) {
-          aiFailCount++;
-          log(`AI 请求失败(${aiFailCount}/3): ${errLog}`, 'err');
-          if (aiFailCount >= 3) {
-            aiCooldownUntil = Date.now() + 10 * 60 * 1000;
-            aiCooldownWarned = false;
-            aiFailCount = 0;
-            log('AI 通道连续失败 3 次,暂停 10 分钟后自动重试。常见原因:Key 错误/余额不足/接口地址或模型名填错', 'warn');
-          }
-        } else {
-          aiFailCount = 0;
-          aiCooldownUntil = 0;
-          aiCooldownWarned = false;
-        }
-        resolve({ form: 'AI', answer });
-      };
-      GM_xmlhttpRequest({
-        method: 'POST',
-        url: CONFIG.aiUrl,
-        data,
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CONFIG.aiKey },
-        timeout: 30000,
-        onload: (res) => {
-          try {
-            if (res.status !== 200) {
-              // 接口不认图片(模型没视觉能力/平台未开放/图片过大)→ 去掉图片重问,别让整题失败
-              if (imgs.length && [400, 413, 415, 422].includes(res.status)) {
-                log('⚠ AI 接口不接受图片(当前模型可能不支持视觉),去掉图片用文字题干重问', 'warn');
-                channelAI(q, hint, true).then(resolve);
-                return;
-              }
-              done([], `HTTP ${res.status}: ${String(res.responseText).slice(0, 180)}`);
-              return;
-            }
-            const obj = JSON.parse(res.responseText);
-            let content = ((obj.choices && obj.choices[0] && obj.choices[0].message && obj.choices[0].message.content) || '').trim();
-            // 推理模型(deepseek-reasoner)有时把结论放在 reasoning_content、content 留空——取推理末尾作答案
-            if (!content) {
-              const rc = ((obj.choices && obj.choices[0] && obj.choices[0].message && obj.choices[0].message.reasoning_content) || '').trim();
-              content = rc.slice(-300);
-            }
-            if (!content) { done([], '返回内容为空'); return; }
-            done(parseAIAnswer(q.type, content));
-          } catch (e) {
-            done([], '解析失败: ' + (e.message || e));
-          }
-        },
-        onerror: () => { done([], '网络错误'); },
-        ontimeout: () => { done([], '超时(30s)'); }
-      });
-    });
-  }
 
   // 图片题追加说明:①占位与附件一一对应 ②题干/选项本身全是图时明确要求"读图当题面"
   function imgTailOf(q) {
@@ -532,10 +448,10 @@
     return out.some(Boolean) ? out : null;
   }
 
-  let aiKeyWarned = false;
+  let webAiWarned = false;
   // hint:可选,错题重问时把"上次判错的答案"带进去让 AI 换思路
   async function getAnswers(q, hint) {
-    // 图片题先把配图抓成 dataURL(带缓存):后面 API 多模态与网页 AI 附件都要用它
+    // 图片题先把配图抓成 dataURL(带缓存):网页 AI 附件要用它
     if (q) await ensureQuestionImages(q);
     // 错题本优先:之前被判错、随后重问 AI 或从结果页取到正确答案的题,重做时直接用修正答案
     if (!hint) {
@@ -546,8 +462,7 @@
         return fixed;
       }
     }
-    // 通道按优先级顺序尝试,任一通道拿到答案即返回。
-    // 原实现是 if/else if 二选一:开了网页 AI 就再不会走 API 通道,网页 AI 一挂就整卷无答案。
+    // 只有网页 AI 一条答题通道:拿到答案即返回,拿不到再查题库
     if (CONFIG.webAiEnabled) {
       const r = await channelWebAI(q, hint);
       const ans = filterAnswers(r.answer);
@@ -556,19 +471,9 @@
         log(`[${r.form}] 查到答案: ${ans.join(' / ')}`, 'ok');
         return ans;
       }
-      if (CONFIG.aiEnabled && CONFIG.aiKey) log('网页 AI 没给出答案,回退到 API 通道再问一次', 'warn');
-    }
-    if (CONFIG.aiEnabled && CONFIG.aiKey) {
-      const r = await channelAI(q, hint);
-      const ans = filterAnswers(r.answer);
-      if (ans.length) {
-        STATS.answered++;
-        log(`[AI] 查到答案: ${ans.join(' / ')}`, 'ok');
-        return ans;
-      }
-    } else if (!CONFIG.webAiEnabled && !aiKeyWarned) {
-      aiKeyWarned = true;
-      log('⚠ 未启用 AI 答题:点面板 ⚙ → 勾选「网页 AI 答题」或「AI 答题」并配置,否则无法自动做题', 'warn');
+    } else if (!webAiWarned) {
+      webAiWarned = true;
+      log('⚠ 未启用 AI 答题:点面板 ⚙ → 勾选「网页 AI 答题」并保持 AI 网页已登录,否则无法自动做题', 'warn');
     }
     const results = CONFIG.useTiku
       ? await Promise.all([channelTikuHai(q), channelYizhi(q), channelYanxi(q), channelMuketool(q)])
@@ -582,8 +487,8 @@
       }
     }
     const reason = CONFIG.webAiEnabled
-      ? '(原因:网页 AI 和 API 都没返回答案 —— 检查 AI 页面是否打开、是否装了「网页AI桥」)'
-      : (!CONFIG.aiEnabled || !CONFIG.aiKey) ? '(原因:AI 答题未启用,请点 ⚙ 配置)' : '';
+      ? '(原因:网页 AI 没返回答案 —— 检查 AI 页面是否打开、是否已登录、是否装了「网页AI桥」)'
+      : '(原因:网页 AI 答题未启用,请点 ⚙ 勾选「网页 AI 答题」)';
     log('未查到答案' + reason, 'warn');
     return [];
   }

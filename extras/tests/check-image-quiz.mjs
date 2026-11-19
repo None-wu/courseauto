@@ -53,7 +53,6 @@ await context.addInitScript(({ u, relay }) => {
     cfg.webAiEnabled = true;
     cfg.webAiUrl = u;
     cfg.webAiRelay = relay;
-    cfg.aiEnabled = false;
     localStorage.setItem(k, JSON.stringify(cfg));
     localStorage.setItem('cxRelay', relay);
   } catch (e) { /* ignore */ }

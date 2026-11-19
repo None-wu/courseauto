@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         刷课助手(学习通/智慧树/雨课堂)
 // @namespace    cx-auto-study
-// @version      1.5.6
+// @version      1.5.7
 // @description  多平台刷课助手:学习通/智慧树(知到)/雨课堂。视频静音连播、自动切任务点、弹题与章节测验自动答题(字体加密解密 + AI)、文档/图片任务、拟人化防检测
 // @author       courseauto contributors
 // @license      Personal Use Only (No Commercial Use) — see LICENSE
@@ -22,7 +22,6 @@
 // @connect      cx.icodef.com
 // @connect      tk.enncy.cn
 // @connect      api.muketool.com
-// @connect      api.deepseek.com
 // @connect      cdn.jsdelivr.net
 // 题目图片散落在各站资源域(p.ananas.chaoxing.com / 智树图床 / 雨课堂 CDN 等),
 // 域名多且会变,图片题要"看图作答"就必须能用油猴跨域把图抓成 dataURL。
@@ -79,13 +78,9 @@
     accFixAllWrong: true,  // 只要有错题就去修(不看整体准确率);关掉则仅在低于 minAccuracy 时才修
     accRedoMax: 2,          // 同一节点最多自动重做几次(防死循环)
     deliberateErrorRate: 0, // 故意答错率 0~0.2(0=不故意错)
-    aiEnabled: false,      // 启用 DeepSeek AI 答题(需填 key)
-    aiKey: '',              // 个人 API Key:点面板 ⚙ 填写(platform.deepseek.com 创建,只存本机)
-    aiUrl: 'https://api.deepseek.com/v1/chat/completions',
-    aiModel: 'deepseek-reasoner',
     useTiku: false,         // 免费题库站(已停止免费,默认关闭,纯 AI 答题)
     reportUrl: '',          // 状态上报地址(调试用,留空=关闭);如 http://127.0.0.1:8790/report
-    webAiEnabled: false,    // 网页 AI 答题(免 API Key,需配合「网页AI桥」脚本)
+    webAiEnabled: false,    // 网页 AI 答题(免 Key,需配合「网页AI桥」脚本)
     webAiBatch: true,       // 整卷模式:整页题目一次性发给网页 AI,批量解析后逐题填写(更快、不易限流;缺漏的题自动回退逐题询问)
     webAiBatchRetry: true,  // 整卷缺题时再整批补问一次(关掉则直接逐题回退)
     webAiUrl: 'https://chat.deepseek.com/',  // 网页 AI 地址
@@ -632,7 +627,7 @@
       title: document.title,
       status: statusEl ? statusEl.textContent : '',
       config: {
-        speed: CONFIG.speed, aiEnabled: CONFIG.aiEnabled, aiModel: CONFIG.aiModel,
+        speed: CONFIG.speed, webAiEnabled: CONFIG.webAiEnabled, webAiUrl: CONFIG.webAiUrl,
         useTiku: CONFIG.useTiku, stopAtTime: CONFIG.stopAtTime,
         autoSubmit: CONFIG.autoSubmit, autoJump: CONFIG.autoJump,
         accCheckEnabled: CONFIG.accCheckEnabled,
@@ -846,7 +841,7 @@
     if (logLines.length === 0) {
       logLines.push({ line: '💡 打开课程章节页即自动开始挂机(无需任何操作)', level: 'info' });
       logLines.push({ line: '⚙ 设置(每项都有说明) | 「开始/停止」控制挂机 | ▼ 展开收起日志', level: 'info' });
-      logLines.push({ line: '🤖 自动做题:请点 ⚙ → 勾选 AI 答题并填写 DeepSeek API Key', level: 'warn' });
+      logLines.push({ line: '🤖 自动做题:请点 ⚙ → 勾选「网页 AI 答题」并保持 AI 网页已登录', level: 'warn' });
     }
     renderLogs();
     // 统计栏每秒刷新(任务点进度 / 已答题数 / 未提交任务点数)
@@ -1019,7 +1014,7 @@
       '<div class="sec">🤖 AI 答题 · 网页版(免 Key,优先)</div>' +
       '<div class="field"><div class="row"><div class="label">🌐 网页 AI 答题</div>' +
         '<input id="cfgWebAI" type="checkbox" ' + (CONFIG.webAiEnabled ? 'checked' : '') + '></div>' +
-        '<div class="hint">勾选后不再走 API:脚本打开 AI 网页、把题目发过去、自动填入并发送、再把回答抓回来。需要同时安装「网页AI桥」脚本(仓库同名文件),并已在该网站登录</div></div>' +
+        '<div class="hint">勾选后由脚本打开 AI 网页、把题目发过去、自动填入并发送、再把回答抓回来。需要同时安装「网页AI桥」脚本(仓库同名文件),并已在该网站登录</div></div>' +
       '<div class="field"><div class="row"><div class="label">🔗 网页 AI 地址</div></div>' +
         '<input id="cfgWebAiUrl" type="text" value="' + CONFIG.webAiUrl + '">' +
         '<button id="cfgOpenWebAI" type="button" class="ghost" style="margin-top:6px">🔗 打开并连接网页 AI</button>' +
@@ -1029,34 +1024,7 @@
         '<div class="hint">开启后把整页题目一次性发给网页 AI、按题号批量回答再自动填写(1 次对话答完所有题,更快、不易触发限流);关闭则逐题询问。缺漏的题会自动回退逐题询问。含图片的题会单独带图逐题问(整批发文字时 AI 看不到图)</div></div>' +
       '<div class="field"><div class="row"><div class="label">🖼 图片题看原图</div>' +
         '<input id="cfgVision" type="checkbox" ' + (CONFIG.aiVision === false ? '' : 'checked') + '></div>' +
-        '<div class="hint">题干/选项是图片(公式、电路图、代码截图)时,把图片本体一起发给 AI,而不是只发一串图片地址。网页 AI 走附件上传(需桥 1.3.2+),API 走多模态。抓图失败会在题干里保留 [图片N] 占位</div></div>' +
-      '<div class="sec">🤖 AI 答题 · API 方式</div>' +
-      '<div class="field"><div class="row"><div class="label">🤖 启用 AI 答题</div>' +
-        '<input id="cfgAI" type="checkbox" ' + (CONFIG.aiEnabled ? 'checked' : '') + '></div>' +
-        '<div class="hint">开启后,网页 AI 和题库都查不到的题目交给大模型自动作答(单选/判断接近 100%)。需在下方填写 API Key</div></div>' +
-      '<div class="field"><div class="row"><div class="label">🏢 AI 平台</div></div>' +
-        '<select id="cfgProvider">' +
-        '<option value="deepseek">DeepSeek(推荐)</option>' +
-        '<option value="siliconflow">硅基流动(注册送额度)</option>' +
-        '<option value="minimax">MiniMax</option>' +
-        '<option value="zhipu">智谱 AI</option>' +
-        '<option value="qwen">通义千问</option>' +
-        '<option value="kimi">Kimi(月之暗面)</option>' +
-        '<option value="openai">OpenAI 官方</option>' +
-        '<option value="custom">其他 / 自定义</option>' +
-        '</select>' +
-        '<div class="hint">选好平台后,下面的模型名和接口地址会自动填好,你只需填 Key。选"其他/自定义"时手动填下面两格</div></div>' +
-      '<div class="field"><div class="row"><div class="label">🔑 API Key</div></div>' +
-        '<input id="cfgAIKey" type="password" placeholder="sk-..." value="' + CONFIG.aiKey + '">' +
-        '<div class="hint">到所选平台的官网注册并创建 API Key(sk- 开头)。只保存在你本机浏览器,不会上传;各平台注册地址见仓库 extras/docs/get-api-key.md</div></div>' +
-      '<div class="field"><div class="row"><div class="label">🧠 AI 模型</div></div>' +
-        '<input id="cfgAIModel" type="text" list="cxModelList" value="' + CONFIG.aiModel + '">' +
-        '<datalist id="cxModelList"></datalist>' +
-        '<button id="cfgFetchModels" type="button" class="ghost" style="margin-top:6px">📋 自动获取模型列表</button>' +
-        '<div class="hint">先填好上方 Key 和接口地址,再点按钮:自动拉取该平台的可用模型,点输入框即可选择,无需手动抄模型名。拉取失败就手动填(各平台模型名见仓库 extras/docs/get-api-key.md)</div></div>' +
-      '<div class="field"><div class="row"><div class="label">🌐 接口地址</div></div>' +
-        '<input id="cfgAIUrl" type="text" value="' + CONFIG.aiUrl + '">' +
-        '<div class="hint">OpenAI 兼容接口地址(以 /chat/completions 结尾)。默认 DeepSeek;MiniMax、智谱、硅基流动等平台的地址见仓库 extras/docs/get-api-key.md</div></div>' +
+        '<div class="hint">题干/选项是图片(公式、电路图、代码截图)时,把图片本体一起发给 AI,而不是只发一串图片地址。网页 AI 走附件上传(需桥 1.3.2+)。抓图失败会在题干里保留 [图片N] 占位</div></div>' +
       '<div class="sec">🛡 安全与拟人</div>' +
       '<div class="field"><div class="row"><div class="label">🎭 故意答错率(%)</div></div>' +
         '<input id="cfgErrRate" type="number" step="1" min="0" max="20" value="' + Math.round(CONFIG.deliberateErrorRate * 100) + '">' +
@@ -1096,10 +1064,6 @@
       CONFIG.speed = parseFloat(document.getElementById('cfgSpeed').value) || 1;
       if (CONFIG.speed < 1) CONFIG.speed = 1;
       if (CONFIG.speed > 2) CONFIG.speed = 2;
-      CONFIG.aiEnabled = document.getElementById('cfgAI').checked;
-      CONFIG.aiKey = document.getElementById('cfgAIKey').value.trim();
-      CONFIG.aiModel = document.getElementById('cfgAIModel').value.trim() || 'deepseek-reasoner';
-      CONFIG.aiUrl = document.getElementById('cfgAIUrl').value.trim() || 'https://api.deepseek.com/v1/chat/completions';
       CONFIG.webAiEnabled = document.getElementById('cfgWebAI').checked;
       CONFIG.webAiBatch = document.getElementById('cfgWebAiBatch').checked;
       {
@@ -1163,7 +1127,7 @@
       CONFIG.reportUrl = document.getElementById('cfgReport').value.trim();
       saveConfig(CONFIG);
       applyStopClock();   // 定时关闭改动立即生效(不用刷新页面)
-      log('配置已保存(倍速 ' + CONFIG.speed + 'x, AI ' + (CONFIG.aiEnabled ? '开' : '关') +
+      log('配置已保存(倍速 ' + CONFIG.speed + 'x, 网页AI ' + (CONFIG.webAiEnabled ? '开' : '关') +
         ', 自动提交 ' + (CONFIG.autoSubmit ? '填充率 100%' : '关') +
         ', 准确率检测 ' + (!CONFIG.accCheckEnabled ? '关'
           : (CONFIG.accFixAllWrong !== false ? '有错题就修' : '≥ ' + Math.round(CONFIG.minAccuracy * 100) + '%') +
@@ -1201,49 +1165,6 @@
       const w = openWebAI();
       if (w) log('🔗 已打开网页 AI,请确认已登录;连接成功会显示「网页 AI 已连接」', 'ok');
       else log('弹窗被浏览器拦截,请在地址栏右侧允许本站弹窗后重试', 'warn');
-    });
-    // 平台预设:选平台自动填接口地址和默认模型
-    const PROVIDERS = {
-      deepseek: { url: 'https://api.deepseek.com/v1/chat/completions', model: 'deepseek-reasoner' },
-      siliconflow: { url: 'https://api.siliconflow.cn/v1/chat/completions', model: 'deepseek-ai/DeepSeek-V3' },
-      minimax: { url: 'https://api.minimaxi.com/v1/chat/completions', model: 'MiniMax-Text-01' },
-      zhipu: { url: 'https://open.bigmodel.cn/api/paas/v4/chat/completions', model: 'glm-4-plus' },
-      qwen: { url: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions', model: 'qwen-plus' },
-      kimi: { url: 'https://api.moonshot.cn/v1/chat/completions', model: 'moonshot-v1-8k' },
-      openai: { url: 'https://api.openai.com/v1/chat/completions', model: 'gpt-4o-mini' },
-      custom: { url: '', model: '' }
-    };
-    document.getElementById('cfgProvider').addEventListener('change', (e) => {
-      const p = PROVIDERS[e.target.value] || PROVIDERS.custom;
-      document.getElementById('cfgAIUrl').value = p.url;
-      document.getElementById('cfgAIModel').value = p.model;
-    });
-    // 自动拉取模型列表:调 OpenAI 兼容的 /models 接口,填充下拉候选
-    document.getElementById('cfgFetchModels').addEventListener('click', async () => {
-      const base = document.getElementById('cfgAIUrl').value.trim();
-      const key = document.getElementById('cfgAIKey').value.trim();
-      const btn = document.getElementById('cfgFetchModels');
-      if (!base) { log('请先填写 AI 接口地址', 'warn'); return; }
-      const modelsUrl = base.replace(/\/chat\/completions\/?$/, '/models');
-      btn.disabled = true;
-      const old = btn.textContent;
-      btn.textContent = '拉取中...';
-      try {
-        const text = await cxFetch(modelsUrl, { method: 'GET', headers: { 'Authorization': 'Bearer ' + key }, timeout: 15000 });
-        const obj = JSON.parse(text);
-        const list = (obj.data || []).map((m) => m.id).filter(Boolean);
-        if (list.length) {
-          const dl = document.getElementById('cxModelList');
-          dl.innerHTML = list.map((id) => '<option value="' + String(id).replace(/"/g, '') + '"></option>').join('');
-          log('✅ 已拉取 ' + list.length + ' 个模型:点输入框右侧箭头选择', 'ok');
-        } else {
-          log('该平台未返回模型列表,请手动填写', 'warn');
-        }
-      } catch (e) {
-        log('拉取失败(该平台可能不支持 /models 接口),请手动填写模型名', 'warn');
-      }
-      btn.disabled = false;
-      btn.textContent = old;
     });
   }
   /* ==================== 答案通道 ==================== */
@@ -1295,90 +1216,6 @@
       if (res.code !== 1) return { form: '木课工具', answer: [] };
       return { form: '木课工具', answer: String(res.data || '').split('#') };
     } catch (e) { return { form: '木课工具', answer: [] }; }
-  }
-  let aiFailCount = 0;
-  let aiCooldownUntil = 0;
-  let aiCooldownWarned = false;
-  // noImg:内部重试用。接口明确拒绝图片(400/413/415/422)时,去掉图片用纯文字再问一次
-  function channelAI(q, hint, noImg) {
-    return new Promise((resolve) => {
-      if (Date.now() < aiCooldownUntil) {
-        if (!aiCooldownWarned) {
-          aiCooldownWarned = true;
-          log('AI 通道冷却中(连续失败后暂停 10 分钟),请检查 ⚙ 里的 Key/平台/接口地址/模型', 'warn');
-        }
-        resolve({ form: 'AI(冷却中)', answer: [] });
-        return;
-      }
-      const prompt = hint ? buildAIPrompt(q) + `\n\n注意:${hint}` : buildAIPrompt(q);
-      // 图片题:OpenAI 兼容协议的多模态写法(纯文本 part + image_url part)。
-      // 老逻辑只发字符串,题干里的图片等于被扔掉,AI 只能靠 [图片N] 占位瞎猜。
-      const imgs = noImg ? [] : (q.images || []).filter(Boolean);
-      const userContent = imgs.length
-        ? [{ type: 'text', text: prompt + `\n\n本题的题目图片已作为附件放在这条消息里(共 ${imgs.length} 张),请直接看图作答。` }]
-          .concat(imgs.map((u) => ({ type: 'image_url', image_url: { url: u } })))
-        : prompt;
-      const data = JSON.stringify({
-        model: CONFIG.aiModel,
-        messages: [
-          { role: 'system', content: '你是答题助手。回复的第一个字符必须是最终答案,严禁输出思考过程、解释、重复题目或任何多余内容。' },
-          { role: 'user', content: userContent }
-        ],
-        temperature: 0.1,
-        max_tokens: 300
-      });
-      const done = (answer, errLog) => {
-        if (errLog) {
-          aiFailCount++;
-          log(`AI 请求失败(${aiFailCount}/3): ${errLog}`, 'err');
-          if (aiFailCount >= 3) {
-            aiCooldownUntil = Date.now() + 10 * 60 * 1000;
-            aiCooldownWarned = false;
-            aiFailCount = 0;
-            log('AI 通道连续失败 3 次,暂停 10 分钟后自动重试。常见原因:Key 错误/余额不足/接口地址或模型名填错', 'warn');
-          }
-        } else {
-          aiFailCount = 0;
-          aiCooldownUntil = 0;
-          aiCooldownWarned = false;
-        }
-        resolve({ form: 'AI', answer });
-      };
-      GM_xmlhttpRequest({
-        method: 'POST',
-        url: CONFIG.aiUrl,
-        data,
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CONFIG.aiKey },
-        timeout: 30000,
-        onload: (res) => {
-          try {
-            if (res.status !== 200) {
-              // 接口不认图片(模型没视觉能力/平台未开放/图片过大)→ 去掉图片重问,别让整题失败
-              if (imgs.length && [400, 413, 415, 422].includes(res.status)) {
-                log('⚠ AI 接口不接受图片(当前模型可能不支持视觉),去掉图片用文字题干重问', 'warn');
-                channelAI(q, hint, true).then(resolve);
-                return;
-              }
-              done([], `HTTP ${res.status}: ${String(res.responseText).slice(0, 180)}`);
-              return;
-            }
-            const obj = JSON.parse(res.responseText);
-            let content = ((obj.choices && obj.choices[0] && obj.choices[0].message && obj.choices[0].message.content) || '').trim();
-            // 推理模型(deepseek-reasoner)有时把结论放在 reasoning_content、content 留空——取推理末尾作答案
-            if (!content) {
-              const rc = ((obj.choices && obj.choices[0] && obj.choices[0].message && obj.choices[0].message.reasoning_content) || '').trim();
-              content = rc.slice(-300);
-            }
-            if (!content) { done([], '返回内容为空'); return; }
-            done(parseAIAnswer(q.type, content));
-          } catch (e) {
-            done([], '解析失败: ' + (e.message || e));
-          }
-        },
-        onerror: () => { done([], '网络错误'); },
-        ontimeout: () => { done([], '超时(30s)'); }
-      });
-    });
   }
 
   // 图片题追加说明:①占位与附件一一对应 ②题干/选项本身全是图时明确要求"读图当题面"
@@ -1780,10 +1617,10 @@
     return out.some(Boolean) ? out : null;
   }
 
-  let aiKeyWarned = false;
+  let webAiWarned = false;
   // hint:可选,错题重问时把"上次判错的答案"带进去让 AI 换思路
   async function getAnswers(q, hint) {
-    // 图片题先把配图抓成 dataURL(带缓存):后面 API 多模态与网页 AI 附件都要用它
+    // 图片题先把配图抓成 dataURL(带缓存):网页 AI 附件要用它
     if (q) await ensureQuestionImages(q);
     // 错题本优先:之前被判错、随后重问 AI 或从结果页取到正确答案的题,重做时直接用修正答案
     if (!hint) {
@@ -1794,8 +1631,7 @@
         return fixed;
       }
     }
-    // 通道按优先级顺序尝试,任一通道拿到答案即返回。
-    // 原实现是 if/else if 二选一:开了网页 AI 就再不会走 API 通道,网页 AI 一挂就整卷无答案。
+    // 只有网页 AI 一条答题通道:拿到答案即返回,拿不到再查题库
     if (CONFIG.webAiEnabled) {
       const r = await channelWebAI(q, hint);
       const ans = filterAnswers(r.answer);
@@ -1804,19 +1640,9 @@
         log(`[${r.form}] 查到答案: ${ans.join(' / ')}`, 'ok');
         return ans;
       }
-      if (CONFIG.aiEnabled && CONFIG.aiKey) log('网页 AI 没给出答案,回退到 API 通道再问一次', 'warn');
-    }
-    if (CONFIG.aiEnabled && CONFIG.aiKey) {
-      const r = await channelAI(q, hint);
-      const ans = filterAnswers(r.answer);
-      if (ans.length) {
-        STATS.answered++;
-        log(`[AI] 查到答案: ${ans.join(' / ')}`, 'ok');
-        return ans;
-      }
-    } else if (!CONFIG.webAiEnabled && !aiKeyWarned) {
-      aiKeyWarned = true;
-      log('⚠ 未启用 AI 答题:点面板 ⚙ → 勾选「网页 AI 答题」或「AI 答题」并配置,否则无法自动做题', 'warn');
+    } else if (!webAiWarned) {
+      webAiWarned = true;
+      log('⚠ 未启用 AI 答题:点面板 ⚙ → 勾选「网页 AI 答题」并保持 AI 网页已登录,否则无法自动做题', 'warn');
     }
     const results = CONFIG.useTiku
       ? await Promise.all([channelTikuHai(q), channelYizhi(q), channelYanxi(q), channelMuketool(q)])
@@ -1830,8 +1656,8 @@
       }
     }
     const reason = CONFIG.webAiEnabled
-      ? '(原因:网页 AI 和 API 都没返回答案 —— 检查 AI 页面是否打开、是否装了「网页AI桥」)'
-      : (!CONFIG.aiEnabled || !CONFIG.aiKey) ? '(原因:AI 答题未启用,请点 ⚙ 配置)' : '';
+      ? '(原因:网页 AI 没返回答案 —— 检查 AI 页面是否打开、是否已登录、是否装了「网页AI桥」)'
+      : '(原因:网页 AI 答题未启用,请点 ⚙ 勾选「网页 AI 答题」)';
     log('未查到答案' + reason, 'warn');
     return [];
   }

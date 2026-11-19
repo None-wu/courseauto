@@ -46,6 +46,20 @@ async function main() {
   });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.addInitScript({ content: await loadGmShimCode() });
+  // API 通道已移除:统一走「网页 AI」(模拟对话页 /ai + 本地中转)
+  await context.addInitScript(({ u, relay }) => {
+    try {
+      const k = 'cxMock:cxConfig';
+      const raw = localStorage.getItem(k);
+      const cfg = raw ? JSON.parse(raw) : {};
+      cfg.webAiEnabled = true;
+      cfg.webAiUrl = u;
+      cfg.webAiRelay = relay;
+      cfg.webAiBatch = false;
+      localStorage.setItem(k, JSON.stringify(cfg));
+      localStorage.setItem('cxRelay', relay);
+    } catch (e) { /* ignore */ }
+  }, { u: `${base}/ai`, relay: base });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e.message)));
@@ -72,7 +86,7 @@ async function main() {
   }).catch(() => null);
 
   let st = null;
-  for (let i = 0; i < 120; i++) {
+  for (let i = 0; i < 200; i++) {
     st = await readState();
     if (st && st.found && st.submitted) break;
     await page.waitForTimeout(500);
