@@ -33,6 +33,9 @@
 | **C. 免安装 exe** | 没装 Node / 要发给同学 | 下 [exe](https://github.com/None-wu/courseauto/releases/latest) → 双击(无黑窗) → 首次跟向导走,之后直达运行状态页 |
 | **D. 手动粘贴** | 想自己掌控 | 油猴面板新建脚本 → 粘 `userscripts/courseauto.user.js` → `Ctrl+S` |
 
+> 🎬 **不想看文档?** 跟着视频装一遍:[安装教程视频(约 100 MB,mp4)](https://github.com/None-wu/courseauto/releases/download/v1.6.0/install-guide.mp4)
+> —— 覆盖下载 exe、过 SmartScreen、装油猴、装脚本、配网页 AI 全流程。
+
 <details>
 <summary><b>方式 A：本机一键安装</b></summary>
 
@@ -384,6 +387,7 @@ npm run test:headed # 有头模式,肉眼看流程
 
 ### v1.6.0 — 无窗口启动 + 运行状态页 + 首启分流
 
+- **Release 附带安装教程视频** `install-guide.mp4`(约 100 MB,不占仓库体积):[点击观看/下载](https://github.com/None-wu/courseauto/releases/download/v1.6.0/install-guide.mp4)
 - **exe 双击不再弹黑色命令行窗口**:改为无窗口启动,启动信息与日志全部搬到网页端,后台常驻做网页 AI 中转
 - **新增运行状态页** `http://127.0.0.1:8790/console`:一屏看版本 / 端口 / 进程 PID / 中转收发量(收题 / 已回传) / 运行时长 / 向导打开方式,
   断开时明确提示「本机服务已停止」
