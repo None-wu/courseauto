@@ -139,15 +139,62 @@
   let webAiSeq = 0;
   let webAiWaiters = [];
 
+  // 开窗去重:页面刷新 / 切章节 / 暂停后又点开始,webAiWin 引用都会丢(跨域 COOP 也会切断引用),
+  // 但 AI 页其实还好好开着。所以额外记一个「上次开窗时间」,短时间内不再弹新窗。
+  const WEBAI_OPEN_KEY = 'cxWebAiOpenAt';
+  const WEBAI_OPEN_TTL = 30 * 60 * 1000;
+
   function webAiOrigin() {
     try { return new URL(CONFIG.webAiUrl).origin; } catch (e) { return '*'; }
   }
 
-  function openWebAI() {
+  function webAiHost() {
+    try { return new URL(CONFIG.webAiUrl).host; } catch (e) { return ''; }
+  }
+
+  function readWebAiOpenMark() {
     try {
-      if (webAiWin && !webAiWin.closed) { webAiWin.focus(); return webAiWin; }
+      const raw = (typeof GM_getValue !== 'undefined')
+        ? GM_getValue(WEBAI_OPEN_KEY, null)
+        : localStorage.getItem(WEBAI_OPEN_KEY);
+      if (!raw) return null;
+      return (typeof raw === 'object') ? raw : JSON.parse(String(raw));
+    } catch (e) { return null; }
+  }
+
+  function markWebAiOpen() {
+    const v = JSON.stringify({ site: webAiHost(), at: Date.now() });
+    try {
+      if (typeof GM_setValue !== 'undefined') GM_setValue(WEBAI_OPEN_KEY, v);
+      else localStorage.setItem(WEBAI_OPEN_KEY, v);
+    } catch (e) { /* ignore */ }
+  }
+
+  // 最近是否开过一次(换了 AI 站点则不算,该开还得开)
+  function webAiOpenRecently() {
+    const m = readWebAiOpenMark();
+    if (!m || !m.at) return false;
+    const site = webAiHost();
+    if (site && m.site && m.site !== site) return false;
+    return (Date.now() - Number(m.at)) < WEBAI_OPEN_TTL;
+  }
+
+  // force=true:调用方已确认 AI 页确实没开(桥不在线),必须真开一个
+  function openWebAI(force) {
+    try {
+      if (webAiWin && !webAiWin.closed) {
+        try { webAiWin.focus(); } catch (e) { /* 跨域/最小化时 focus 可能失败,不算错误 */ }
+        return webAiWin;
+      }
+      webAiWin = null;
+      if (!force && webAiOpenRecently()) {
+        // 引用丢了但刚开过:再弹一个新窗只会让用户看到一堆重复的 AI 标签页
+        log('🔗 网页 AI 页已打开过,不再重复开新窗口(确实关掉了就点 ⚙ →「打开并连接网页 AI」)', 'info');
+        return null;
+      }
       webAiReady = false;
       webAiWin = window.open(CONFIG.webAiUrl, 'cx-web-ai', 'popup=yes,width=560,height=820');
+      if (webAiWin) markWebAiOpen();
       return webAiWin;
     } catch (e) { return null; }
   }
@@ -203,15 +250,10 @@
     const bridgeUp = site ? await bridgeOnlineFor(site) : true;
     // 通道一:postMessage 直连(窗口引用在手且桥已握手)—— 延迟最低
     if (bridgeUp) {
-      let win = webAiWin && !webAiWin.closed ? webAiWin : null;
-      if (!win) {
-        // 还没开过 AI 页:先尝试开窗(用户手势后的弹窗放行;自动答题时的 open 可能被拦截,拦了走中转)
-        win = openWebAI();
-        if (win) {
-          await waitWebAiReady(8000);
-          if (webAiReady) return postMessageAsk(win, text, timeoutMs, expect, imgs);
-        }
-      } else {
+      // 桥在线说明 AI 页开着,但页面刷新/切章节后本脚本拿不到窗口引用了;
+      // 这种时候绝对不能再开新窗(否则每暂停一次就多一个 AI 标签页),直接走下面的中转
+      const win = (webAiWin && !webAiWin.closed) ? webAiWin : null;
+      if (win) {
         await waitWebAiReady(8000);
         if (webAiReady) return postMessageAsk(win, text, timeoutMs, expect, imgs);
       }
@@ -675,7 +717,8 @@
       return false;   // 服务没开,开 AI 页也没用,不空等 90s
     }
     log(`🚀 先打开网页 AI 页面(${site}),等它就绪后开始答题...`, 'info');
-    try { openWebAI(); } catch (e) { /* 非手势弹窗可能被拦,用户手动打开也一样 */ }
+    // 走到这里说明桥确实不在线(页面没开或没装桥),这一窗必须真开,不能被去重挡掉
+    try { openWebAI(true); } catch (e) { /* 非手势弹窗可能被拦,用户手动打开也一样 */ }
     const deadline = Date.now() + 90000;
     let lastLog = 0;
     while (Date.now() < deadline) {

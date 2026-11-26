@@ -13,6 +13,8 @@
     --mono:ui-monospace,SFMono-Regular,"Cascadia Mono",Consolas,"Courier New",monospace;
   }
   *{box-sizing:border-box}
+  /* !important:保证优先级高于下面 .btn 等自带的 display,否则 hidden 按钮藏不住 */
+  [hidden]{display:none!important}
   html,body{margin:0;padding:0}
   body{
     background:
@@ -56,6 +58,25 @@
   .btn.dim{color:var(--txt-2)}
   .btn.danger:hover{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.45);color:#fafafa}
   .btn.on{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.45);color:#f2f2f4}
+
+  /* 退出程序:唯一带红的按钮,和满屏黑白按钮拉开层次 */
+  .btn.quit{
+    background:linear-gradient(145deg,#ef5350,#c62828);border-color:#ef5350;color:#fff;font-weight:700;
+    padding:10px 18px;font-size:13.5px;border-radius:10px;box-shadow:0 3px 16px rgba(229,57,53,.38)
+  }
+  .btn.quit:hover{background:linear-gradient(145deg,#ff6b68,#d32f2f);border-color:#ff8a87;color:#fff;box-shadow:0 5px 20px rgba(229,57,53,.52)}
+  .btn.quit.on{background:linear-gradient(145deg,#ff1744,#b71c1c);border-color:#ff1744;color:#fff;animation:qbpulse 1s infinite}
+  @keyframes qbpulse{0%,100%{box-shadow:0 3px 16px rgba(229,57,53,.4)}50%{box-shadow:0 3px 26px rgba(255,23,68,.85)}}
+
+  /* 叉页面时的提示浮层 */
+  .qh-mask{position:fixed;inset:0;background:rgba(0,0,0,.66);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}
+  .qh-card{
+    max-width:430px;width:100%;background:var(--card-2);border:1px solid rgba(239,83,80,.5);
+    border-radius:16px;padding:22px 22px 18px;box-shadow:0 26px 64px rgba(0,0,0,.66)
+  }
+  .qh-card b{display:block;font-size:16.5px;color:#fff;letter-spacing:.2px}
+  .qh-card p{margin:10px 0 0;font-size:13px;color:var(--txt-2);line-height:1.7}
+  .qh-acts{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap}
 
   /* 首屏大卡片 */
   .hero{
@@ -213,7 +234,7 @@
       <span class="vchip" id="live"><i></i><span id="liveTx">连接中…</span></span>
       <button class="btn small" id="toSetup" title="回到安装向导页">安装向导</button>
       <button class="btn small dim" id="toConsole" title="重新拉起本状态页">刷新页面</button>
-      <button class="btn small danger" id="quit" title="结束本进程(退出后答题中转会断开)">退出程序</button>
+      <button class="btn quit" id="quit" title="结束本进程(退出后答题中转会断开)">退出程序</button>
     </div>
   </div>
 
@@ -222,7 +243,7 @@
     <span class="dot"></span>
     <div class="tt">
       <b id="heroTitle">刷课助手正在本机运行</b>
-      <span id="heroDesc">答题中转依赖本进程,请保持运行;关闭本网页不会退出程序。</span>
+      <span id="heroDesc">答题中转依赖本进程,请保持运行;叉掉本网页不会退出程序,要完全关闭请点右上角「退出程序」。</span>
     </div>
     <div class="big">
       <b id="upTime">--:--:--</b>
@@ -379,6 +400,18 @@
   </div>
 
   <div class="toast" id="toast"></div>
+
+  <!-- 叉掉页面时的提示:浏览器原生确认框不能自定义文案,这里补一个页面内浮层把话说清楚 -->
+  <div class="qh-mask" id="quitHint" hidden>
+    <div class="qh-card">
+      <b>要完全关闭先点击「退出程序」</b>
+      <p>直接关掉本网页,刷课助手的后台服务还在跑:答题中转不会断,但你也找不到它了。要彻底退出,请点下面的按钮,或右上角红色「退出程序」。</p>
+      <div class="qh-acts">
+        <button class="btn quit" id="qhQuit">退出程序</button>
+        <button class="btn" id="qhStay">继续使用</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -443,7 +476,7 @@
     $('liveTx').textContent = '运行中';
     $('hero').classList.remove('down');
     $('heroTitle').textContent = d.title + ' v' + d.version + ' 正在本机运行';
-    $('heroDesc').textContent = '本进程需保持运行以转发答题请求;关闭本网页不会退出程序。';
+    $('heroDesc').textContent = '本进程需保持运行以转发答题请求;叉掉本网页不会退出程序,要完全关闭请点右上角「退出程序」。';
     $('portTx').textContent = '127.0.0.1:' + d.port;
     $('portSub').textContent = d.url;
     $('verTx').textContent = 'v' + d.version;
@@ -539,18 +572,28 @@
     toast('已保存日志文件');
   };
 
+  // ============ 退出程序 ============
+  // 关页面 != 退出程序:进程还在跑,答题中转不断。所以①按钮本身要够醒目 ②叉页面时拦一下并说清楚
+  var QUIT_DONE = false;
+  var QUIT_TX = '要完全关闭先点击「退出程序」';
   var quitArmed = 0;
-  $('quit').onclick = function () {
-    var btn = this;
-    if (!quitArmed) {
-      quitArmed = 1;
-      btn.textContent = '再点一次确认';
-      btn.classList.add('on');
-      setTimeout(function () { quitArmed = 0; btn.textContent = '退出程序'; btn.classList.remove('on'); }, 3200);
-      return;
-    }
-    quitArmed = 0;
+
+  function showQuitHint() {
+    var m = $('quitHint');
+    if (m) m.hidden = false;
+  }
+  function hideQuitHint() {
+    var m = $('quitHint');
+    if (m) m.hidden = true;
+  }
+
+  function doQuit() {
+    if (QUIT_DONE) return;
+    QUIT_DONE = true;
+    hideQuitHint();
+    var btn = $('quit');
     btn.disabled = true;
+    btn.classList.remove('on');
     btn.textContent = '正在退出…';
     fetch('/api/app/quit', { method: 'POST' })
       .then(function () { toast('程序已退出,可关闭本页'); })
@@ -559,7 +602,37 @@
       state.paused = true;
       applyDead();
     }, 500);
+  }
+
+  $('quit').onclick = function () {
+    var btn = this;
+    if (!quitArmed) {
+      quitArmed = 1;
+      btn.textContent = '再点一次确认退出';
+      btn.classList.add('on');
+      setTimeout(function () {
+        if (QUIT_DONE) return;
+        quitArmed = 0;
+        btn.textContent = '退出程序';
+        btn.classList.remove('on');
+      }, 3200);
+      return;
+    }
+    quitArmed = 0;
+    doQuit();
   };
+
+  $('qhQuit').onclick = doQuit;
+  $('qhStay').onclick = hideQuitHint;
+
+  // 浏览器只允许写自己的通用确认框,自定义文案靠上面的页面内浮层补足
+  window.addEventListener('beforeunload', function (e) {
+    if (QUIT_DONE || state.dead) return;   // 已经退出/进程本来就没了,不用再拦
+    e.preventDefault();
+    e.returnValue = QUIT_TX;
+    showQuitHint();
+    return QUIT_TX;
+  });
 
   var chips = $('chips').querySelectorAll('.chip');
   for (var ci = 0; ci < chips.length; ci++) {
@@ -599,10 +672,23 @@
     $('ubBarIn').style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
 
+  // 一个按钮都没得点时,把整行按钮区收起来,别留一行空白
+  function syncUpdateActs() {
+    var acts = document.querySelector('.uacts');
+    if (!acts) return;
+    var any = false;
+    for (var i = 0; i < acts.children.length; i++) {
+      if (!acts.children[i].hidden) { any = true; break; }
+    }
+    acts.hidden = !any;
+  }
+
   function renderUpdate(u) {
     u = u || {};
     UPD = u;
     var cur = u.current || '--';
+    // 各分支都是 return 提前结束,统一放到本轮尾声再同步按钮区显隐
+    setTimeout(syncUpdateActs, 0);
     $('ubDl').hidden = true;
     $('ubReveal').hidden = true;
     $('ubSkip').hidden = true;
@@ -614,7 +700,6 @@
     if (u.state === 'checking') {
       $('ubIc').textContent = '…';
       $('ubDesc').hidden = false;
-      $('ubDesc').hidden = false;
     $('ubTitle').textContent = '正在检测更新…';
       $('ubDesc').textContent = '当前 v' + cur;
       return;
@@ -622,7 +707,6 @@
     if (u.state === 'has-update') {
       var skipped = !!u.skippedVersion && u.skippedVersion === u.latest;
       $('ubIc').textContent = '↑';
-      $('ubDesc').hidden = false;
       $('ubDesc').hidden = false;
     $('ubTitle').textContent = '发现新版本 v' + u.latest + (skipped ? '(已跳过)' : '');
       $('ubDesc').textContent = '当前 v' + cur

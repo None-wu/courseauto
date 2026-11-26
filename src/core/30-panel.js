@@ -278,20 +278,24 @@
       // 这里主动让适配器重跑一轮(从当前进度继续,不重头来)
       try { if (typeof resumeWatching === 'function') resumeWatching(); } catch (e) { /* ignore */ }
     }
-    // 恢复挂机且启用网页 AI 时:借用户手势自动拉起 AI 页,并验证桥是否在线
+    // 恢复挂机且启用网页 AI 时:先用桥状态判断 AI 页是否还在,在就绝不再开新窗口
     if (!PAUSED && CONFIG.webAiEnabled && typeof openWebAI === 'function') {
-      try { openWebAI(); } catch (e) { /* 弹窗被拦也不影响挂机 */ }
       setTimeout(async () => {
         try {
           const site = new URL(CONFIG.webAiUrl).host;
           const raw = await cxFetch((CONFIG.webAiRelay || 'http://127.0.0.1:8790').replace(/\/$/, '') + '/api/webai/status', { timeout: 5000 });
           const o = JSON.parse(raw);
-          const up = o.ok && Array.isArray(o.sites) && o.sites.some((s) => s.host === site);
+          const st = Array.isArray(o.sites) ? o.sites.find((s) => s.host === site) : null;
+          const up = !!(o.ok && st);
+          if (!up) {
+            // 桥不在线才补开一个(带上开窗去重,短时间内不会反复弹窗)
+            try { openWebAI(); } catch (e) { /* 弹窗被拦也不影响挂机 */ }
+          }
           log(up
-            ? `🔗 网页 AI 桥在线(${site}${o.sites.find((s) => s.host === site).ver && o.sites.find((s) => s.host === site).ver !== '?' ? ' v' + o.sites.find((s) => s.host === site).ver : ''}),可以自动答题`
+            ? `🔗 网页 AI 桥在线(${site}${st.ver && st.ver !== '?' ? ' v' + st.ver : ''}),可以自动答题`
             : `⚠ ${site} 的网页 AI 桥不在线:请切到网页 AI 标签页确认已打开且登录、桥脚本为最新版(别关标签页,可以最小化)`, up ? 'ok' : 'warn');
         } catch (e) { /* 中转服务不在线时静默 */ }
-      }, 6000);
+      }, 2000);
     }
   }
 
@@ -398,7 +402,8 @@
     document.getElementById('cfgClose').addEventListener('click', () => panel.remove());
     // 打开网页 AI:必须由用户点击触发,否则浏览器会当作弹窗拦截
     document.getElementById('cfgOpenWebAI').addEventListener('click', () => {
-      const w = openWebAI();
+      // 用户显式要求开窗,force 绕过「刚开过就别再开」的去重
+      const w = openWebAI(true);
       if (w) log('🔗 已打开网页 AI,请确认已登录;连接成功会显示「网页 AI 已连接」', 'ok');
       else log('弹窗被浏览器拦截,请在地址栏右侧允许本站弹窗后重试', 'warn');
     });
