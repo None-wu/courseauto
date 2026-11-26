@@ -36,6 +36,19 @@
 > 🎬 **不想看文档?** 跟着视频装一遍:[安装教程视频(约 100 MB,mp4)](https://github.com/None-wu/courseauto/releases/download/v1.6.0/install-guide.mp4)
 > —— 覆盖下载 exe、过 SmartScreen、装油猴、装脚本、配网页 AI 全流程。
 
+## 📸 界面预览
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/setup-wizard.png" alt="安装向导"><br><sub><b>安装向导</b>:双击 exe 自动打开,装油猴 → 装脚本 → 进课程页</sub></td>
+    <td width="50%"><img src="docs/screenshots/console.png" alt="运行状态页"><br><sub><b>运行状态页</b>(<code>127.0.0.1:8790/console</code>):版本与更新检测、AI 中转计数、实时日志</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/settings.png" alt="面板设置"><br><sub><b>脚本设置面板</b>:倍速、定时关闭、网页 AI 中转地址,每项都带说明</sub></td>
+    <td width="50%"><img src="docs/screenshots/log.png" alt="学习进程日志"><br><sub><b>学习进程日志</b>:任务点逐条执行记录与时间戳</sub></td>
+  </tr>
+</table>
+
 <details>
 <summary><b>方式 A：本机一键安装</b></summary>
 
@@ -319,6 +332,7 @@ courseauto/
 │   ├── pages/console.html               # 运行状态页:版本更新 / 开始刷课 / 本机设置 / 运行日志(最近 400 条)
 │   └── lib/gm-shim.js                   # GM API 垫片(无油猴时跑脚本用)
 ├── tools/                        # build.mjs(拼脚本) / pack.mjs(打 exe)
+├── docs/screenshots/             # README 界面预览图(向导/状态页/面板设置/进程日志)
 ├── extras/                       # 非程序文件
 │   ├── tests/                           # 端到端沙箱(无头浏览器 + 断言)
 │   ├── mock/                            # 模拟页:章节/视频/测验/新老结构
