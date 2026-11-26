@@ -89,9 +89,6 @@
   .hero .tt{flex:1;min-width:220px}
   .hero .tt b{display:block;font-size:17px;color:var(--white);letter-spacing:.2px}
   .hero .tt span{display:block;font-size:12.5px;color:var(--txt-2);margin-top:4px}
-  .hero .big{text-align:right}
-  .hero .big b{font-family:var(--mono);font-size:20px;color:var(--white);letter-spacing:.5px}
-  .hero .big small{display:block;font-size:11.5px;color:var(--txt-3);margin-top:2px}
 
   /* 指标网格 */
   .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
@@ -159,7 +156,6 @@
 
   @media (max-width:900px){
     .grid{grid-template-columns:repeat(2,1fr)}
-    .hero .big{text-align:left}
   }
   @media (max-width:560px){
     .wrap{padding:18px 13px 30px}
@@ -244,10 +240,6 @@
     <div class="tt">
       <b id="heroTitle">刷课助手正在本机运行</b>
       <span id="heroDesc">答题中转依赖本进程,请保持运行;叉掉本网页不会退出程序,要完全关闭请点右上角「退出程序」。</span>
-    </div>
-    <div class="big">
-      <b id="upTime">--:--:--</b>
-      <small>已运行</small>
     </div>
   </div>
 
@@ -418,7 +410,7 @@
 (function () {
   var $ = function (id) { return document.getElementById(id); };
   var box = $('logBox');
-  var state = { since: 0, paused: false, filter: 'all', rows: [], dead: false, startedAt: Date.now(), serverUptime: 0, lastSync: Date.now() };
+  var state = { since: 0, paused: false, filter: 'all', rows: [], dead: false };
 
   function toast(tx) {
     var el = $('toast');
@@ -433,13 +425,6 @@
   function hms(ts) {
     var d = new Date(ts);
     return pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds());
-  }
-
-  function dur(ms) {
-    if (!(ms >= 0)) return '--:--:--';
-    var s = Math.floor(ms / 1000);
-    var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
-    return pad(h) + ':' + pad(m) + ':' + pad(s % 60);
   }
 
   var LV_TXT = { info: 'INFO', ok: 'OK', warn: 'WARN', err: 'ERR', net: 'NET', sys: 'SYS' };
@@ -471,7 +456,6 @@
 
   function applyStatus(d) {
     state.dead = false;
-    state.serverUptime = d.uptime || 0;
     $('live').className = 'vchip ok';
     $('liveTx').textContent = '运行中';
     $('hero').classList.remove('down');
@@ -643,11 +627,6 @@
       renderRows();
     };
   }
-
-  // 计时:本地秒表 + 服务端 uptime 校准
-  setInterval(function () {
-    $('upTime').textContent = dur(state.serverUptime + Math.max(0, Date.now() - (state.lastSync || Date.now())));
-  }, 1000);
 
   /* ================= 从安装向导迁来的功能:版本更新 / 开始刷课 / 本机设置 ================= */
   var UPD = { cur: '', latest: '', state: '' };
@@ -914,7 +893,7 @@
   // 轮询
   pullStatus();
   pullLog();
-  setInterval(function () { pullStatus(); state.lastSync = Date.now(); }, 5000);
+  setInterval(pullStatus, 5000);
   setInterval(pullLog, 1000);
 })();
 </script>
