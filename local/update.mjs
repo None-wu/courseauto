@@ -63,7 +63,8 @@ function request(url, { headers = {}, timeout = PER_SOURCE_TIMEOUT, redirect = 5
 /* ---------------- 检测 ---------------- */
 function pickAsset(assets, version) {
   const list = (assets || []).filter((a) => a && a.name && /\.(exe|zip)$/i.test(a.name));
-  const exact = list.find((a) => a.name === `刷课助手-v${version}.exe`);
+  const exact = list.find((a) => a.name === `courseauto-v${version}.exe`)
+    || list.find((a) => a.name === `刷课助手-v${version}.exe`);
   if (exact) return exact;
   const exe = list.find((a) => /\.exe$/i.test(a.name));
   if (exe) return exe;
@@ -95,7 +96,7 @@ async function viaApi(current, opts) {
 }
 
 // 兜底下载地址:回退源(releases/latest、version.json)拿不到资产列表,只能按我们自己的命名规则拼。
-// 线上 Release 的资产名是 courseauto-vX.Y.Z.exe(本地 pack 产物是中文名,上传时会改名),两个候选都留着;
+// 线上 Release 与本地 pack 产物同名 courseauto-vX.Y.Z.exe,旧版中文名候选留作兼容;
 // 真正下载时 downloadTo 会逐个试,404 自动换下一个。
 function fallbackAssets(latest) {
   const names = [`courseauto-v${latest}.exe`, `刷课助手-v${latest}.exe`];

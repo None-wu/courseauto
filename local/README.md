@@ -9,7 +9,7 @@ npm run setup      # 检测浏览器 → 起服务 → 自动打开安装向导(
 npm run app        # 客户版入口(不打包也能跑,行为与 exe 一致)
 npm run detect     # 只检测并打印:本机有哪些浏览器、是否装了油猴
 npm run mock       # 开发用:安装接口 + 中转 + 模拟学习通页面
-npm run pack       # 打包成 dist/刷课助手-vX.exe(单文件,见 tools/pack.mjs)
+npm run pack       # 打包成 dist/courseauto-vX.exe(单文件,见 tools/pack.mjs)
 ```
 
 也可以直接跑：`node local/setup.mjs 8800`（自定义端口）。

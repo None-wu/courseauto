@@ -1,6 +1,7 @@
 // 打包客户版:一个 exe,双击即用(内置安装向导 + 两个脚本 + 网页 AI 中转)
 // 用法:node tools/pack.mjs [--no-zip] [--keep]
-//   产物:dist/刷课助手-vX.Y.Z.exe + dist/使用说明.txt (+ dist/刷课助手-vX.Y.Z-win64.zip)
+//   产物:dist/courseauto-vX.Y.Z.exe + dist/README-vX.Y.Z.txt (+ dist/courseauto-vX.Y.Z-win64.zip)
+//   命名与 GitHub Release 资产名保持一致,本地文件名 = 线上资产名,不用再映射改名
 import { execFileSync, execSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync, rmSync, existsSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -74,7 +75,7 @@ if (!bun) {
   process.exit(1);
 }
 mkdirSync(DIST, { recursive: true });
-const exeName = `刷课助手-v${sv}.exe`;
+const exeName = `courseauto-v${sv}.exe`;
 const exePath = path.join(DIST, exeName);
 if (existsSync(exePath)) rmSync(exePath);
 
@@ -204,11 +205,11 @@ A: 学习通改版会导致选择器失配。面板会提示"自检失败"并把
 
 版本:v${sv}    脚本:v${sv}    网页 AI 桥:v${bv}
 `;
-const guidePath = path.join(DIST, '使用说明.txt');
+const guidePath = path.join(DIST, `README-v${sv}.txt`);
 writeFileSync(guidePath, utf8Bom(guide), 'utf8');
 
 if (!NO_ZIP) {
-  const zipName = `刷课助手-v${sv}-win64.zip`;
+  const zipName = `courseauto-v${sv}-win64.zip`;
   const zipPath = path.join(DIST, zipName);
   if (existsSync(zipPath)) rmSync(zipPath);
   try {
@@ -233,7 +234,7 @@ if (!KEEP) {
 }
 
 console.log(`\n完成 → ${DIST}`);
-console.log(`   ${exeName}${existsSync(path.join(DIST, `刷课助手-v${sv}-win64.zip`)) ? ` + 刷课助手-v${sv}-win64.zip` : ''} + 使用说明.txt`);
+console.log(`   ${exeName}${existsSync(path.join(DIST, `courseauto-v${sv}-win64.zip`)) ? ` + courseauto-v${sv}-win64.zip` : ''} + README-v${sv}.txt`);
 console.log('   直接把这个 exe(或压缩包)发给客户,双击即可运行。\n');
 
 function utf8Bom(s) { return '\ufeff' + s; }   // 记事本打开中文不乱码

@@ -1,5 +1,5 @@
 // 客户版入口:打包成单个 exe,双击即起本地服务并打开安装向导
-// 打包:node tools/pack.mjs  →  dist/刷课助手-vX.exe
+// 打包:node tools/pack.mjs  →  dist/courseauto-vX.exe
 // 开发:node local/app.mjs   (没打包时自动从磁盘读脚本,行为一致)
 //
 // 启动流程:
